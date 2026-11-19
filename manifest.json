@@ -1,9 +1,10 @@
 {
-  "version": "1.12.2",
+  "version": "1.13.0",
   "files": [
     "core.js",
     "debug.js",
     "twilight.js",
+    "themes/midnight.css",
     "plugins/clearNotifs.js",
     "plugins/clearUrls.js",
     "plugins/clonerTest.js",
@@ -15,6 +16,7 @@
     "plugins/messageLogger.js",
     "plugins/messageMenu.js",
     "plugins/noTrack.js",
+    "plugins/petpet.js",
     "plugins/platformIndicators.js",
     "plugins/probe.js",
     "plugins/roleDividers.js",
@@ -29,7 +31,6 @@
     "plugins/typingSpeed.js",
     "plugins/viewIcons.js",
     "plugins/voiceLog.js",
-    "plugins/windowButtons.js",
-    "themes/midnight.css"
+    "plugins/windowButtons.js"
   ]
 }

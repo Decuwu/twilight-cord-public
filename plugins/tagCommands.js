@@ -13,13 +13,15 @@ Twilight.definePlugin({
     { name: 'tag-list', id: '9000000000000000013', sub: 'list', desc: 'Show all your saved tags', opts: [] },
     { name: 'tag-delete', id: '9000000000000000014', sub: 'delete', desc: 'Remove a saved tag', opts: [{ name: 'name', description: 'Which tag', required: true, max_length: 32, tags: true }] },
   ],
+  all() { return [...this.CMDS, ...Twilight.slash.cmds.values()]; }, // our own four + commands other plugins registered (Petpet)
+  sigNow() { return this.tagNames().join('|') + '#' + [...Twilight.slash.cmds.keys()].join('|'); },
   tagNames() { return Object.keys(Twilight.ls.get('tags', {})).sort().slice(0, 25); },
   build() {
     const me = this, APP = me.APP, ver = '9000000000000000100', names = me.tagNames();
-    me.sig = names.join('|');
+    me.sig = me.sigNow();
     const opt = o => { const r = { type: 3, name: o.name, description: o.description, required: !!o.required, max_length: o.max_length, description_localized: o.description, name_localized: o.name }; if (o.tags && names.length) r.choices = names.map(n => ({ name: n, value: n })); return r; };
     const commands = {};
-    for (const c of me.CMDS) {
+    for (const c of me.all()) {
       const raw = c.opts.map(opt);
       const root = { id: c.id, type: 1, application_id: APP, version: ver, name: c.name, description: c.desc, options: raw, dm_permission: true, contexts: [0, 1, 2], integration_types: [0, 1], description_localized: c.desc, name_localized: c.name };
       const shown = raw.map(o => ({ ...o, serverLocalizedName: o.name, displayName: o.name, displayDescription: o.description, maxLength: o.max_length, ...(o.choices ? { choices: o.choices.map(x => ({ ...x, displayName: x.name })) } : {}) }));
@@ -32,7 +34,7 @@ Twilight.definePlugin({
   inject() {
     const T = Twilight, me = this; let n = 0;
     const st = T.findStore('ApplicationCommandIndexStore'); if (!st) return 0;
-    if (!me.section || me.sig !== me.tagNames().join('|')) me.section = me.build(); // rebuilt when your saved tags change (they are the choices for /tag)
+    if (!me.section || me.sig !== me.sigNow()) me.section = me.build(); // rebuilt when your saved tags change (they are the choices for /tag)
     const section = me.section;
     try { if (!T.findStore('ApplicationStore')?.getApplication(me.APP)) { const a = section.descriptor.application; T.dispatcher()?.dispatch({ type: 'APPLICATION_FETCH_SUCCESS', application: { id: me.APP, name: 'Twilight', icon: null, description: a.description, bot: a.bot, flags: 0, type: null } }); } } catch {}
     try { if (!T.findStore('UserStore')?.getUser(me.APP)) T.dispatcher()?.dispatch({ type: 'USER_UPDATE', user: { id: me.APP, username: 'Twilight', discriminator: '0', avatar: null, bot: true, global_name: null, public_flags: 0, flags: 0 } }); } catch {}
@@ -66,10 +68,17 @@ Twilight.definePlugin({
         const cid = T.findStore('SelectedChannelStore').getChannelId(), c = T.findStore('ApplicationCommandStore').getActiveCommand(cid);
         if (!c || c.applicationId !== me.APP) return;
         e.preventDefault(); e.stopImmediatePropagation(); // ours: never let Discord send it as a bot request
-        const def = me.CMDS.find(x => x.name === c.untranslatedName), tg = tags(); if (!def || !tg) return;
+        const def = me.all().find(x => x.name === c.untranslatedName), tg = tags(); if (!def || (!tg && !def.run)) return;
         const box = document.querySelector('[role="textbox"][data-slate-editor="true"]'), v = me.read(def, box?.textContent);
         try { T.ls.set('tagDbg', { cmd: def.name, box: box?.textContent?.slice(0, 200), v }); } catch {}
         const need = def.opts.filter(o => o.required && !v[o.name]);
+        if (def.run) { // a command from another plugin (Petpet): clear the box, then let it run
+          if (need.length) return Twilight.notify('/' + def.name, 'needs: ' + need.map(o => o.name).join(', '), 3500, 'warn');
+          try { box?.focus(); document.execCommand('selectAll'); document.execCommand('delete'); } catch {}
+          try { T.dispatcher()?.dispatch({ type: 'APPLICATION_COMMAND_SET_ACTIVE_COMMAND', channelId: cid, command: null, section: null }); } catch {}
+          setTimeout(() => { try { def.run(v); } catch (x) { T.log('/' + def.name, x); } }, 50);
+          return;
+        }
         if (need.length) return tg.say('**/' + def.name + '** needs: ' + need.map(o => '`' + o.name + '`').join(', ') + '. Fill in each field, then press Enter.');
         const cmd = { cmd: def.sub, name: (v.name || '').replace(/^"|"$/g, '').split(/\s+/)[0].toLowerCase(), text: v.text || '' };
         tg.run(cmd, text => { try { box?.focus(); T.cmd({ type: 'edit', op: 'set', text: text || '' }); } catch {} });
@@ -77,9 +86,11 @@ Twilight.definePlugin({
       } catch (x) { me.fail(x); }
     };
     window.addEventListener('keydown', me.onKey, true);
+    T.slash.onChange = () => { me.section = null; me.kick(); };
   },
   fail(e) { try { Twilight.notify('Tag commands', 'Switched off: ' + String(e).slice(0, 100), 6000, 'error'); } catch {} this.stop(); },
   stop() {
+    if (Twilight.slash.onChange) Twilight.slash.onChange = null;
     this.undoFlux?.(); window.removeEventListener('keydown', this.onSlash, true); window.removeEventListener('keydown', this.onKey, true);
     try { const t = Twilight.plugins.get('Tags'); if (t) t.native = false; } catch {}
     try { const st = Twilight.findStore('ApplicationCommandIndexStore'); for (const ix of Object.values(st?.indices || {})) { delete ix.result?.sections?.[this.APP]; delete ix.result?.sectionIdsByBotId?.[this.APP]; } } catch {}

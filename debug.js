@@ -143,7 +143,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     FriendNotifier: 'Notifiers', VoiceLog: 'Notifiers', Assistant: 'Assistant', Generated: 'Assistant',
     GlassTheme: 'Appearance', ThemeMaker: 'Appearance', ImageZoom: 'Appearance', ViewIcons: 'Appearance',
     ClearNotifications: 'Servers', QuickServerMute: 'Servers',
-    NoTrack: 'Privacy', SilentTyping: 'Privacy', Spit: 'Media', ClonerTest: 'Housekeeping', Probe: 'Housekeeping', Hello: 'Housekeeping' };
+    NoTrack: 'Privacy', SilentTyping: 'Privacy', Petpet: 'Media', QuestCompleter: 'Housekeeping', ClonerTest: 'Housekeeping', Probe: 'Housekeeping', Hello: 'Housekeeping' };
   const groupOf = p => p.group || GROUP_OF[p.name] || 'Housekeeping';
   const byGroup = list => GROUPS.map(g => [g, list.filter(x => groupOf(x.p || x) === g)]).filter(([, l]) => l.length);
 
@@ -613,19 +613,24 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
 
   const blank = (n, label) => { n.removeAttribute('data-list-item-id'); n.removeAttribute('aria-posinset'); n.removeAttribute('id'); n.querySelectorAll('[data-list-item-id]').forEach(x => x.removeAttribute('data-list-item-id')); n.querySelectorAll('[aria-label]').forEach(x => x.setAttribute('aria-label', label)); n.querySelectorAll('[id]').forEach(x => x.removeAttribute('id')); };
   // Twilight's own presence: active (green) or idle (moon) while Claude is out of usage. Nothing is copied from the row we cloned.
-  const asstText = () => { if (!T.limited()) return 'Active'; const u = T.ls.get('asstLimit', null)?.until; return 'Out of usage' + (u ? ' · back about ' + new Date(u).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''); };
+  // What Twilight is working on (status.json, read from the main process at most once a minute while the rows are being painted; no timer).
+  let proj = null, projAt = 0;
+  const projText = () => proj ? 'Working on ' + proj : '';
+  const projRefresh = () => { if (Date.now() - projAt < 60000) return; projAt = Date.now(); T.cmd({ type: 'project' }, 3000).then(r => { const p = r?.project || null; if (p !== proj) { proj = p; T.debug_paintAsst?.(); } }).catch(() => {}); };
+  const asstText = () => { if (!T.limited()) return projText() || 'Active'; const u = T.ls.get('asstLimit', null)?.until; return 'Out of usage' + (u ? ' · back about ' + new Date(u).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''); };
   const paint = (n, sub) => {
     const idle = T.limited(), sig = idle ? 'idle' : 'on'; n.dataset.twState = sig;
-    n.querySelectorAll('img').forEach(i => { i.src = T.pfp; i.removeAttribute('srcset'); });
+    n.querySelectorAll('img').forEach(i => { i.src = T.pfp; i.removeAttribute('srcset'); i.style.borderRadius = '50%'; i.style.objectFit = 'cover'; }); // round like every other avatar
     n.querySelectorAll('svg rect[mask*="status"]').forEach(r => { r.setAttribute('fill', idle ? '#f0b232' : '#23a55a'); r.setAttribute('mask', idle ? 'url(#svg-mask-status-idle)' : 'url(#svg-mask-status-online)'); });
     const st = n.querySelector('[class*="subText"],[class*="subtext"]'); // the cloned row's game / activity line is replaced
     if (st) { const d = h('div', { className: 'body-xs/medium_RAOoio', textContent: sub || asstText() }); st.replaceChildren(d); }
   };
   const unselect = n => { for (const e of [n, ...n.querySelectorAll('*')]) for (const c of [...e.classList]) if (/selected/i.test(c)) e.classList.remove(c); };
-  T.debug_paintAsst = () => { for (const n of document.querySelectorAll('[data-tw-dm]')) paint(n); for (const n of document.querySelectorAll('[data-tw-fr]')) paint(n, T.limited() ? asstText() : 'Your assistant'); };
+  T.debug_paintAsst = () => { for (const n of document.querySelectorAll('[data-tw-dm]')) paint(n); for (const n of document.querySelectorAll('[data-tw-fr]')) paint(n, T.limited() ? asstText() : projText() || 'Your assistant'); };
   let keepObs;
   const injectLists = () => {
     if (T.isOff('Assistant') || !asst()) return; // no Assistant plugin (public build) = no Twilight rows
+    projRefresh();
     const first = () => [...document.querySelectorAll('nav[class*="privateChannels"] a[data-list-item-id^="private-channels"][href^="/channels/@me/"]')].map(a => a.closest('li')).find(l => l && !l.dataset.twDm);
     const dm = first();
     let n = document.querySelector('[data-tw-dm]');
@@ -655,10 +660,10 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
       f.querySelector('[class*="username"]')?.replaceChildren('Twilight'); f.querySelectorAll('[class*="chipletContainer"]').forEach(x => x.remove());
       const d = f.querySelector('[class*="discriminator"]'); if (d) d.textContent = 'twilight';
       f.querySelectorAll('[class*="actions"],[class*="actionButtons"]').forEach(x => x.remove());
-      paint(f, T.limited() ? asstText() : 'Your assistant');
+      paint(f, T.limited() ? asstText() : projText() || 'Your assistant');
       f.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); asst()?.quick(); }, true);
       row.before(f);
-    } else { const f = document.querySelector('[data-tw-fr]'); if (f && f.dataset.twState !== (T.limited() ? 'idle' : 'on')) paint(f, T.limited() ? asstText() : 'Your assistant'); }
+    } else { const f = document.querySelector('[data-tw-fr]'); if (f && f.dataset.twState !== (T.limited() ? 'idle' : 'on')) paint(f, T.limited() ? asstText() : projText() || 'Your assistant'); }
   };
   const injectButton = () => {};
 

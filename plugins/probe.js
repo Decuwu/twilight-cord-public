@@ -65,7 +65,7 @@ Twilight.definePlugin({
     await t('popouts', async () => JSON.stringify(await Twilight.cmd({ type: 'status' })));
     await t('clonerTest', () => T.ls.get('clonerPassedV2', false) ? 'passed earlier' : 'not passed yet (see reports/cloner.log)');
     await t('cost', () => Object.fromEntries(Object.entries(T.cost.by).map(([k, v]) => [k, `${v.ms.toFixed(1)}ms/${v.n} worst ${v.max.toFixed(0)}`])));
-    await t('spitGif', async () => T.plugins.get('Spit')?.selfTest ? await T.plugins.get('Spit').selfTest() : 'no selfTest');
+    await t('petpetGif', async () => T.plugins.get('Petpet')?.selfTest ? await T.plugins.get('Petpet').selfTest() : 'no selfTest');
     await t('metrics', async () => { const m = await T.cmd({ type: 'metrics' }, 30000); return m && !m.error ? { keys: Object.keys(m).slice(0, 8), sample: JSON.stringify(m).slice(0, 300) } : 'FAIL ' + JSON.stringify(m).slice(0, 200); });
     await t('blurSupport', () => CSS.supports('backdrop-filter', 'blur(2px)'));
     return out;

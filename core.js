@@ -403,7 +403,9 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
   };
 
   window.Twilight = {
-    plugins, rest, msgScan, ctx, commands: new Map(), // chat commands: name -> { help, run(args, channelId) }
+    plugins, rest, msgScan, ctx, commands: new Map(),
+    // Native slash commands: a plugin adds { name, id, desc, opts:[{name,description,required,max_length}], run(values) }; the Tag commands plugin shows them in Discord's command list.
+    slash: { cmds: new Map(), add(d) { this.cmds.set(d.name, d); this.onChange?.(); }, remove(n) { this.cmds.delete(n); this.onChange?.(); } }, // chat commands: name -> { help, run(args, channelId) }
     find, findAll,
     notify,
     ls, isOff, setOff, findStore,
