@@ -9,6 +9,22 @@ if (process.type === 'browser') {
   const jsonStrict = f => { try { const o = JSON.parse(fs.readFileSync(path.join(__dirname, f), 'utf8')); return o && typeof o === 'object' && !Array.isArray(o) ? o : undefined; } catch { return undefined; } };
   const writeAtomic = (f, text) => { const out = path.join(__dirname, f), tmp = out + '.tmp'; fs.writeFileSync(tmp, text); fs.renameSync(tmp, out); };
   const name = n => path.basename(String(n));
+  // One line per event in reports/launch.txt (starts, restarts, page ready), so a restart can be checked from the folder.
+  const note = s => { try { fs.mkdirSync(path.join(__dirname, 'reports'), { recursive: true }); fs.appendFileSync(path.join(__dirname, 'reports', 'launch.txt'), `${new Date().toISOString()} ${s}\n`); } catch {} };
+  // Which Discord this is. Stable, PTB and Canary share this folder, so anything aimed at one of them checks this.
+  const CHANNEL = (b => b.includes('ptb') ? 'ptb' : b.includes('canary') ? 'canary' : 'stable')(path.basename(process.execPath).toLowerCase());
+  // Restart through Discord's own Update.exe, the way the Start menu shortcut opens it: that starts the NEWEST app-* build.
+  // A plain relaunch restarts this exact exe, which after a Discord update is the old build. Electron waits for this process
+  // to exit before starting the new one, so Discord's one-window lock never sees two copies.
+  const restart = why => {
+    const { app } = require('electron'), upd = path.join(path.dirname(process.execPath), '..', 'Update.exe');
+    note(`restart ${CHANNEL} (${why})`);
+    try {
+      if (process.platform === 'win32' && fs.existsSync(upd)) app.relaunch({ execPath: upd, args: ['--processStart', path.basename(process.execPath)] });
+      else app.relaunch();
+    } catch { app.relaunch(); }
+    app.exit(0);
+  };
 
   // Every plugin file in plugins/ loads unless its name is listed in config.json "disabled".
   const listPlugins = () => {
@@ -104,6 +120,7 @@ if (process.type === 'browser') {
     return { text: (r.json[0] || []).map(p => p[0]).join(''), from: r.json[2] };
   };
 
+
   // The Theme tab asks for window changes through here (only these few keys, nothing else is writable).
   ipcMain.handle('twilight:cmd', (e, c) => {
     if (c?.type === 'win' && ['minimize', 'maximize', 'close'].includes(c.op)) { // the Window buttons plugin (top right)
@@ -137,9 +154,10 @@ if (process.type === 'browser') {
     if (c?.type === 'safe') {
       const f = path.join(__dirname, 'safe.flag');
       if (c.on) fs.writeFileSync(f, 'safe mode on'); else fs.rmSync(f, { force: true });
-      require('electron').app.relaunch(); require('electron').app.exit(0);
+      restart(c.on ? 'menu: safe mode' : 'menu: leave safe mode');
     }
-    if (c?.type === 'relaunch') { require('electron').app.relaunch(); require('electron').app.exit(0); }
+    if (c?.type === 'relaunch') restart('menu');
+    if (c?.type === 'ready') { note(`page ready ${CHANNEL} v${json('manifest.json').version || '?'}`); return { ok: true }; }
     return null;
   });
 
@@ -252,6 +270,7 @@ if (process.type === 'browser') {
   });
   app.whenReady().then(() => {
     try { keepHook(); } catch {}
+    note(`started ${CHANNEL} ${path.basename(path.dirname(process.execPath))} v${json('manifest.json').version || '?'}`);
     pending = check().catch(e => ({ error: e.message }));
     const s = session.defaultSession;
     s.setPreloads([...s.getPreloads(), __filename]);
@@ -262,7 +281,7 @@ if (process.type === 'browser') {
     let d; try { d = JSON.parse(e.detail); } catch { return; }
     ipcRenderer.invoke('twilight:cmd', d.cmd).then(r => window.dispatchEvent(new CustomEvent('twilight-reply', { detail: JSON.stringify({ id: d.id, r }) })), () => {});
   });
-  webFrame.executeJavaScript(ipcRenderer.sendSync('twilight:code'));
+  webFrame.executeJavaScript(ipcRenderer.sendSync('twilight:code')).then(() => ipcRenderer.invoke('twilight:cmd', { type: 'ready' }), () => {});
   ipcRenderer.invoke('twilight:update').then(r => {
     if (!r) return;
     const msg = r.error ? ['Update check failed', r.error.slice(0, 60), 'error']

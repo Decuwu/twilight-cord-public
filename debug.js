@@ -2,7 +2,7 @@
 (() => {
   const T = window.Twilight;
   if (!T) return;
-  const h = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids); return e; };
+  const h = (tag, props = {}, ...kids) => { const e = Object.assign(document.createElement(tag), props); e.append(...kids.filter(k => k != null && k !== false)); return e; };
   T.h = h;
   // Uses Twilight.ls (Discord removes window.localStorage, so core grabs it early and keeps a memory copy).
   const store = { get: () => T.ls.get('qcss', ''), set: v => T.ls.set('qcss', v) };
@@ -717,6 +717,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     version: '?',
     toggle,
     refresh: () => popup.isOpen() && POP.view === 'Menu' && render(),
+    page: () => (searchMode ? 'Search' : nav.tab), // which menu page is showing (a plugin can skip redraws while it is not on screen)
     init(opts = {}) {
       T.debug.key = opts.debugKey || 'ctrl+f';
       T.debug.version = opts.version || '?';
