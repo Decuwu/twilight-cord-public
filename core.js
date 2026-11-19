@@ -436,6 +436,7 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
     // Native slash commands: a plugin adds { name, id, desc, opts:[{name,description,required,max_length}], run(values) }; the Tag commands plugin shows them in Discord's command list.
     slash: { cmds: new Map(), add(d) { this.cmds.set(d.name, d); this.onChange?.(); }, remove(n) { this.cmds.delete(n); this.onChange?.(); } }, // chat commands: name -> { help, run(args, channelId) }
     find, findAll,
+    wreq: () => (grab(), wreq), // Discord's main webpack require (module sources in .m), for finding patch targets
     notify,
     ls, isOff, setOff, findStore,
     logs, evalJS, isDispatcher, dispatcher, diagnose,

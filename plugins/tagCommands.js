@@ -1,7 +1,10 @@
 // Puts the tag commands into Discord's own slash-command list as a "Twilight" app (same look as any bot's commands):
 //   /tag <name>  puts a saved tag in your message box   /tag-create <name> <text>  saves one   /tag-list   /tag-delete <name>
-// Nothing is sent anywhere: when you press Enter on one of these, Twilight runs it locally and shows a reply only you can see.
-// If anything goes wrong this plugin switches itself off and the older /tag suggestion list (Tags plugin) takes over again.
+// They are real local app commands, like Discord's own /shrug: each one carries an execute() function, and Discord's command runner
+// calls it on your PC instead of contacting a bot (it fills in the options itself, so a picked @user arrives as their user ID, and it
+// clears the box). /tag sends the tag text as your message (like /shrug does); the others reply with a message only you can see.
+// Nothing reaches Discord's servers except that /tag message. If anything goes wrong this plugin switches itself off and typing
+// /tag ... by hand (Tags plugin) still works.
 Twilight.definePlugin({
   name: 'Tag commands',
   vs: 'Not in the command list',
@@ -25,7 +28,9 @@ Twilight.definePlugin({
       const raw = c.opts.map(opt);
       const root = { id: c.id, type: 1, application_id: APP, version: ver, name: c.name, description: c.desc, options: raw, dm_permission: true, contexts: [0, 1, 2], integration_types: [0, 1], description_localized: c.desc, name_localized: c.name };
       const shown = raw.map(o => ({ ...o, serverLocalizedName: o.name, displayName: o.name, displayDescription: o.description, maxLength: o.max_length, ...(o.choices ? { choices: o.choices.map(x => ({ ...x, displayName: x.name })) } : {}) }));
-      commands[c.id] = { version: ver, id: c.id, untranslatedName: c.name, serverLocalizedName: c.name, applicationId: APP, type: 1, inputType: 3, untranslatedDescription: c.desc, options: shown, rootCommand: root, dmPermission: true, displayName: c.name, displayDescription: c.desc, contexts: [0, 1, 2], integration_types: [0, 1] };
+      // inputType 1 = BUILT_IN_TEXT: Discord runs execute() itself and sends what it returns ({ content }); null sends nothing.
+      commands[c.id] = { version: ver, id: c.id, untranslatedName: c.name, serverLocalizedName: c.name, applicationId: APP, type: 1, inputType: 1, untranslatedDescription: c.desc, options: shown, rootCommand: root, dmPermission: true, displayName: c.name, displayDescription: c.desc, contexts: [0, 1, 2], integration_types: [0, 1],
+        execute: (opts, ctx) => me.exec(c, opts, ctx) };
     }
     const bot = { id: APP, username: 'Twilight', discriminator: '0', avatar: null, bot: true, system: false, flags: 0, publicFlags: 0, globalName: null };
     const descriptor = { type: 1, id: APP, name: 'Twilight', icon: null, application: { description: 'Twilight client tools', icon: null, id: APP, name: 'Twilight', bot, flags: '0', embedded_surfaces: [] }, isUserApp: false, botId: APP };
@@ -44,29 +49,27 @@ Twilight.definePlugin({
     try { const cid = T.findStore('SelectedChannelStore').getChannelId(), ch = T.findStore('ChannelStore').getChannel(cid); if (ch) put(st.getContextState({ type: 'channel', channel: ch })); } catch {}
     return n;
   },
-  // Discord keeps what you typed in the message box itself: "/tag-create" + "name" + hidden marker + value + "text" + hidden marker + value ...
-  // Option values, best source first: Discord's own editor data (each option is a node with its name, so nothing has to be guessed
-  // from the text), then the box text split on Discord's hidden markers. `how` says which one worked (written to reports/tagcmd.json).
-  read(cmd, text, box) {
-    const out = {}, ed = this.editorOf(box);
-    if (ed) {
-      const str = n => n == null ? '' : typeof n.text === 'string' ? n.text : n.userId ? `<@${n.userId}>` : n.roleId ? `<@&${n.roleId}>` : n.channelId ? `<#${n.channelId}>` : (n.children || []).map(str).join('');
-      const walk = (n, d = 0) => { if (!n || d > 8) return; if (typeof n.optionName === 'string' && !(n.optionName in out)) out[n.optionName] = str(n).replace(/[​﻿]/g, '').trim(); for (const c of n.children || []) walk(c, d + 1); };
-      for (const n of ed.children || []) walk(n);
-      if (Object.keys(out).length) { cmd.opts.forEach(o => { out[o.name] ??= ''; }); out[this.HOW] = 'editor'; return out; }
-    }
-    const parts = String(text || '').split(/[​﻿]+/).filter(x => x !== '');
-    cmd.opts.forEach((o, i) => { out[o.name] = (parts[1 + 2 * i] || '').trim(); });
-    out[this.HOW] = 'text'; return out;
-  },
-  HOW: Symbol('how'),
-  // The Slate editor behind Discord's message box (found through React's data on the element; read only).
-  editorOf(box) {
+  // Called by Discord's command runner with the options it already parsed: [{ name, type, value }] (a user option's value is the user ID).
+  exec(def, opts, ctx) {
+    const T = Twilight, v = {}, tg = T.plugins.get('Tags');
+    for (const o of opts || []) v[o.name] = o.value == null ? '' : String(o.value);
+    this.report(def, v);
     try {
-      const k = box && Object.keys(box).find(x => x.startsWith('__reactFiber$')); let f = k && box[k];
-      for (let i = 0; f && i < 40; i++, f = f.return) { const e = f.memoizedProps?.editor; if (e && Array.isArray(e.children)) return e; }
-    } catch {}
+      if (def.run) { setTimeout(() => { try { def.run(v, ctx); } catch (x) { T.log('/' + def.name, x); } }, 0); return null; } // another plugin's command (Petpet)
+      if (!tg) { T.notify('/' + def.name, 'The Tags plugin is off', 3000, 'warn'); return null; }
+      const name = (v.name || '').replace(/^"|"$/g, '').split(/\s+/)[0].toLowerCase();
+      if (def.sub === 'use') {
+        const text = T.ls.get('tags', {})[name];
+        if (text != null) return { content: text };
+        tg.run({ cmd: 'use', name }, () => {}); return null; // no such tag: only-you-see reply with suggestions
+      }
+      tg.run({ cmd: def.sub, name, text: v.text || '' }, () => {});
+    } catch (x) { T.log('/' + def.name, x); }
     return null;
+  },
+  // reports/tagcmd.json: the last command and the length of each value (never the text itself).
+  report(def, v) {
+    try { Twilight.cmd({ type: 'report', name: 'tagcmd.json', text: JSON.stringify({ at: new Date().toISOString(), cmd: def.name, how: 'discord', lengths: Object.fromEntries(def.opts.map(o => [o.name, (v[o.name] || '').length])) }, null, 1) }); } catch {}
   },
   start() {
     const T = Twilight, me = this, tags = () => T.plugins.get('Tags');
@@ -80,48 +83,13 @@ Twilight.definePlugin({
     window.addEventListener('keydown', me.onSlash, { passive: true, capture: true });
     try { me.inject(); } catch (e) { return me.fail(e); }
     if (tags()) tags().native = true;
-    if (T.ls.get('tagDbg', null)) T.ls.set('tagDbg', null); // the old debug copy kept the box text in settings.json; reports/tagcmd.json replaces it
-    me.onKey = e => {
-      if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
-      try {
-        const cid = T.findStore('SelectedChannelStore').getChannelId(), c = T.findStore('ApplicationCommandStore').getActiveCommand(cid);
-        if (!c || c.applicationId !== me.APP) return;
-        e.preventDefault(); e.stopImmediatePropagation(); // ours: never let Discord send it as a bot request
-        const def = me.all().find(x => x.name === c.untranslatedName), tg = tags(); if (!def || (!tg && !def.run)) return;
-        const box = document.querySelector('[role="textbox"][data-slate-editor="true"]'), v = me.read(def, box?.textContent, box);
-        me.report(def, v, box);
-        const need = def.opts.filter(o => o.required && !v[o.name]);
-        if (def.run) { // a command from another plugin (Petpet): clear the box, then let it run
-          if (need.length) return Twilight.notify('/' + def.name, 'needs: ' + need.map(o => o.name).join(', '), 3500, 'warn');
-          try { box?.focus(); document.execCommand('selectAll'); document.execCommand('delete'); } catch {}
-          try { T.dispatcher()?.dispatch({ type: 'APPLICATION_COMMAND_SET_ACTIVE_COMMAND', channelId: cid, command: null, section: null }); } catch {}
-          setTimeout(() => { try { def.run(v); } catch (x) { T.log('/' + def.name, x); } }, 50);
-          return;
-        }
-        if (need.length) return tg.say('**/' + def.name + '** needs: ' + need.map(o => '`' + o.name + '`').join(', ') + '. Fill in each field, then press Enter.');
-        const cmd = { cmd: def.sub, name: (v.name || '').replace(/^"|"$/g, '').split(/\s+/)[0].toLowerCase(), text: v.text || '' };
-        // Leave Discord's command mode first (empty box, no active command), then let Tags put the tag text in the now-normal box.
-        try { box?.focus(); document.execCommand('selectAll'); document.execCommand('delete'); } catch {}
-        try { T.dispatcher()?.dispatch({ type: 'APPLICATION_COMMAND_SET_ACTIVE_COMMAND', channelId: cid, command: null, section: null }); } catch {}
-        setTimeout(() => { try { tg.run(cmd); } catch (x) { T.log('/' + def.name, x); } }, 50);
-      } catch (x) { me.fail(x); }
-    };
-    window.addEventListener('keydown', me.onKey, true);
+    if (T.ls.get('tagDbg', null)) T.ls.set('tagDbg', null); // the old debug copy kept the box text in settings.json
     T.slash.onChange = () => { me.section = null; me.kick(); };
-  },
-  // reports/tagcmd.json: how the last command's values were read (which source, option names, value lengths, the editor's node
-  // types). No values are written, only their length, so tag text never ends up in the file.
-  report(def, v, box) {
-    try {
-      const ed = this.editorOf(box), shape = n => n && { type: n.type, opt: n.optionName, keys: Object.keys(n).filter(k => k !== 'children').slice(0, 8), kids: (n.children || []).slice(0, 6).map(shape) };
-      Twilight.cmd({ type: 'report', name: 'tagcmd.json', text: JSON.stringify({ at: new Date().toISOString(), cmd: def.name, how: v[this.HOW], lengths: Object.fromEntries(def.opts.map(o => [o.name, (v[o.name] || '').length])),
-        markers: (String(box?.textContent || '').match(/[​﻿]/g) || []).length, editor: !!ed, nodes: ed ? (ed.children || []).slice(0, 4).map(shape) : null }, null, 1) });
-    } catch {}
   },
   fail(e) { try { Twilight.notify('Tag commands', 'Switched off: ' + String(e).slice(0, 100), 6000, 'error'); } catch {} this.stop(); },
   stop() {
     if (Twilight.slash.onChange) Twilight.slash.onChange = null;
-    this.undoFlux?.(); window.removeEventListener('keydown', this.onSlash, true); window.removeEventListener('keydown', this.onKey, true);
+    this.undoFlux?.(); window.removeEventListener('keydown', this.onSlash, true);
     try { const t = Twilight.plugins.get('Tags'); if (t) t.native = false; } catch {}
     try { const st = Twilight.findStore('ApplicationCommandIndexStore'); for (const ix of Object.values(st?.indices || {})) { delete ix.result?.sections?.[this.APP]; delete ix.result?.sectionIdsByBotId?.[this.APP]; } } catch {}
   },
