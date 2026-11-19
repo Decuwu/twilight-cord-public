@@ -162,32 +162,43 @@ if (process.type === 'browser') {
     req.on('error', reject);
   });
 
+  // Several Discords (Stable, PTB, Canary) share this folder and all check for updates when they start. A lock file makes sure only one does the swap.
+  const takeLock = () => {
+    const f = path.join(__dirname, 'update.lock');
+    try { if (Date.now() - fs.statSync(f).mtimeMs > 120000) fs.rmSync(f, { force: true }); } catch {}
+    try { fs.closeSync(fs.openSync(f, 'wx')); return () => fs.rmSync(f, { force: true }); } catch { return null; }
+  };
+  const swap = (from, to) => { try { fs.renameSync(from, to); } catch { fs.copyFileSync(from, to); fs.rmSync(from, { force: true }); } }; // rename can fail on Windows if something has the file open
+
   const check = async () => {
     const { repo, branch = 'main', token } = json('config.json');
     if (!repo) return null;
     const url = f => `https://api.github.com/repos/${repo}/contents/${f}?ref=${encodeURIComponent(branch)}`;
     const remote = JSON.parse(await get(url('manifest.json'), token));
     if (!newer(remote.version, json('manifest.json').version || '0')) return null;
-    const files = (remote.files || []).filter(f => SAFE.test(f)).slice(0, 80);
-    if (!files.includes('core.js') || !files.includes('twilight.js')) throw new Error('manifest incomplete');
-    const data = await Promise.all(files.map(async f => [f, await get(url(f), token)]));
-    // Check everything BEFORE touching the installed files: not empty, not huge, and every .js file must at least parse.
-    const vm = require('vm');
-    for (const [f, buf] of data) {
-      if (!buf.length || buf.length > 3e6) throw new Error('bad file ' + f);
-      if (f.endsWith('.js')) { try { new vm.Script(buf.toString('utf8'), { filename: f }); } catch (e) { throw new Error('syntax error in ' + f); } }
-    }
-    // Write each file next to its place first, then rename them all in one go, so a crash half way never leaves a mix of old and new.
-    const staged = [];
+    const unlock = takeLock(); if (!unlock) return null; // another Discord is updating right now: it will do it
     try {
-      for (const [f, buf] of data) { const out = path.join(__dirname, f); fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out + '.new', buf); staged.push(out); }
-    } catch (e) { for (const o of staged) fs.rmSync(o + '.new', { force: true }); throw e; }
-    for (const o of staged) fs.renameSync(o + '.new', o);
-    // remove files we managed before that the new manifest dropped (never touches files we didn't ship)
-    for (const f of json('manifest.json').files || [])
-      if (!files.includes(f) && SAFE.test(f)) fs.rmSync(path.join(__dirname, f), { force: true });
-    writeAtomic('manifest.json', JSON.stringify(remote, null, 2));
-    return { updated: remote.version, restart: files.includes('twilight.js') };
+      const files = (remote.files || []).filter(f => SAFE.test(f)).slice(0, 80);
+      if (!files.includes('core.js') || !files.includes('twilight.js')) throw new Error('manifest incomplete');
+      const data = await Promise.all(files.map(async f => [f, await get(url(f), token)]));
+      // Check everything BEFORE touching the installed files: not empty, not huge, and every .js file must at least parse.
+      const vm = require('vm');
+      for (const [f, buf] of data) {
+        if (!buf.length || buf.length > 3e6) throw new Error('bad file ' + f);
+        if (f.endsWith('.js')) { try { new vm.Script(buf.toString('utf8'), { filename: f }); } catch (e) { throw new Error('syntax error in ' + f); } }
+      }
+      // Write each file next to its place first, then swap them all in one go, so a crash half way never leaves a mix of old and new.
+      const staged = [];
+      try {
+        for (const [f, buf] of data) { const out = path.join(__dirname, f); fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out + '.new', buf); staged.push(out); }
+      } catch (e) { for (const o of staged) fs.rmSync(o + '.new', { force: true }); throw e; }
+      for (const o of staged) swap(o + '.new', o);
+      // remove files we managed before that the new manifest dropped (never touches files we didn't ship)
+      for (const f of json('manifest.json').files || [])
+        if (!files.includes(f) && SAFE.test(f)) fs.rmSync(path.join(__dirname, f), { force: true });
+      writeAtomic('manifest.json', JSON.stringify(remote, null, 2));
+      return { updated: remote.version, restart: files.includes('twilight.js') };
+    } finally { unlock(); }
   };
 
   // ---- keeps itself installed ----

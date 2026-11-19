@@ -102,7 +102,7 @@ box-shadow:0 0 0 1px rgba(255,255,255,.22) inset,0 2px 12px rgba(108,200,255,.45
 .twp-body{position:relative;flex:1;min-height:0}
 html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}`;
 
-  let side, body, footer, tab = 'Notify';
+  let side, body, footer;
   const input = (placeholder, value = '') => h('input', { placeholder, value });
   const sec = t => h('div', { className: 'twd-sec', textContent: t });
   const info = (k, v) => h('div', { className: 'twd-row info' }, h('span', { textContent: k }), h('span', { textContent: String(v), style: 'color:#a9c4db' }));
@@ -188,28 +188,10 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     },
     Plugins() {
       if (!T.plugins.size) return [h('div', { className: 'twd-out', textContent: 'No plugins loaded.' })];
-      const flip = p => {
-        const turnOn = T.isOff(p.name);
-        try {
-          turnOn ? p.start?.() : p.stop?.();
-          T.setOff(p.name, !turnOn);
-          T.log(`${p.name} ${turnOn ? 'enabled' : 'disabled'}`);
-          T.notify(p.name, turnOn ? 'Enabled' : (p.stop ? 'Disabled' : 'Off after restart'), 1800, turnOn ? 'success' : 'warn');
-        }
-        catch (e) { T.notify(p.name + ' failed', String(e.message || e).slice(0, 70), 5000, 'error'); }
-        render();
-      };
       const nodes = [];
-      for (const [g, list] of byGroup([...T.plugins.values()].filter(p => !p.actionOnly && !p.hidden))) { // action-only plugins live in the Tools tab
+      for (const [g, list] of byGroup([...T.plugins.values()].filter(p => !p.actionOnly && !p.hidden))) { // action-only plugins live in the Tools page
         nodes.push(sec(g));
-        for (const p of list) {
-          nodes.push(ledRow(p.name, !T.isOff(p.name), () => flip(p), p.desc));
-          for (const o of p.options || []) {
-            const on = T.opt(p.name, o.key, o.def);
-            if (o.min != null) { nodes.push(slider(o.label, o.min, o.max, o.step || 1, on, v => String(v), v => T.setOpt(p.name, o.key, v))); continue; }
-            nodes.push(ledRow(o.label, on, () => { T.setOpt(p.name, o.key, !on); render(); }, '', 'sub'));
-          }
-        }
+        for (const p of list) nodes.push(ledRow(p.name, !T.isOff(p.name), () => flipPlugin(p), p.desc), ...optionRows(p));
       }
       return nodes;
     },
@@ -232,7 +214,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
         sec('Safe mode and cost'),
         ...(T.debug.safe ? [action('Leave safe mode', () => T.cmd({ type: 'safe', on: false }), null, 'Restarts Discord with all plugins back on')]
           : [action('Restart in safe mode', () => T.cmd({ type: 'safe', on: true }), null, 'Restarts Discord with no plugins or themes, in case something breaks')]),
-        action('Show plugin cost', () => { tab = 'Cost'; render(); }, null, 'Which plugin uses how much time'),
+        action('Show plugin cost', () => { goto('Global', 'Cost'); render(); }, null, 'Which plugin uses how much time'),
         ...byGroup(acts.map(([p, a]) => ({ p, a }))).flatMap(([g, list]) => [sec(g), ...list.map(({ p, a }) =>
           action(a.label, () => { try { a.run(); } catch (e) { T.notify(p.name + ' failed', String(e.message || e).slice(0, 70), 5000, 'error'); } }, null, a.sub || p.name))]),
         ...(acts.length ? [] : [h('div', { className: 'twd-out', textContent: 'No plugin actions available.' })]),
@@ -325,26 +307,55 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     },
   };
 
-  // Menu tabs are ordered by how often you use them. The order is only recomputed every 10 tab changes, so it does not jump around.
-  const allTabs = () => [...Object.keys(views), ...[...T.plugins.values()].filter(p => p.tab && !T.isOff(p.name)).map(p => p.tab.name)];
-  const useTab = name => {
-    const u = T.ls.get('tabUse', { n: 0, c: {}, order: [] }); u.c[name] = (u.c[name] || 0) + 1; u.n++;
-    if (u.n % 10 === 0) u.order = Object.keys(u.c).sort((a, b) => u.c[b] - u.c[a]);
-    T.ls.set('tabUse', u);
+  // ---- Menu layout: three tabs ----
+  // Local = things that act on what you are looking at, in submenus (Self, Look, Privacy, Channel, Discord). Global = Twilight itself (settings, plugins, tools, developer pages). Quests = the quest completer.
+  const PLACE = { Tags: 'Self', 'Tag commands': 'Self', Snippets: 'Self', TypingSpeed: 'Self', 'Window buttons': 'Self',
+    GlassTheme: 'Look', ThemeMaker: 'Look', ImageZoom: 'Look', ViewIcons: 'Look',
+    NoTrack: 'Privacy', SilentTyping: 'Privacy',
+    MessageLogger: 'Channel', Translate: 'Channel', ClearURLs: 'Channel', StaffTags: 'Channel', RoleDividers: 'Channel', PlatformIndicators: 'Channel', MessageMenu: 'Channel', Petpet: 'Channel',
+    FriendNotifier: 'Discord', VoiceLog: 'Discord', QuickServerMute: 'Discord', ClearNotifications: 'Discord', EmojiStealer: 'Discord', Assistant: 'Discord', Generated: 'Discord' };
+  const SUBS = { Local: ['Self', 'Look', 'Privacy', 'Channel', 'Discord'], Global: ['General', 'Plugins', 'Notify', 'CSS', 'Console', 'Cost', 'Info'] };
+  const NAME = { General: 'Tools' }; // Global > General is the old Tools page
+  const nav = Object.assign({ tab: 'Local', Local: 'Self', Global: 'General' }, T.ls.get('menuNav', {}));
+  const goto = (t, s) => { nav.tab = t; if (s) nav[t] = s; T.ls.set('menuNav', nav); };
+  const placeOf = p => p.place || PLACE[p.name];
+  const flipPlugin = p => {
+    const turnOn = T.isOff(p.name);
+    try {
+      turnOn ? p.start?.() : p.stop?.();
+      T.setOff(p.name, !turnOn);
+      T.log(`${p.name} ${turnOn ? 'enabled' : 'disabled'}`);
+      T.notify(p.name, turnOn ? 'Enabled' : (p.stop ? 'Disabled' : 'Off after restart'), 1800, turnOn ? 'success' : 'warn');
+    } catch (e) { T.notify(p.name + ' failed', String(e.message || e).slice(0, 70), 5000, 'error'); }
+    render();
   };
-  const tabs = () => {
-    const all = allTabs(), order = T.ls.get('tabUse', { order: [] }).order || [], rank = t => { const i = order.indexOf(t); return i < 0 ? 1e6 : i; };
-    return all.map((t, i) => [t, i]).sort((a, b) => (rank(a[0]) - rank(b[0])) || (a[1] - b[1])).map(x => x[0]);
+  const optionRows = p => (p.options || []).map(o => {
+    const on = T.opt(p.name, o.key, o.def);
+    return o.min != null ? slider(o.label, o.min, o.max, o.step || 1, on, v => String(v), v => T.setOpt(p.name, o.key, v))
+      : ledRow(o.label, on, () => { T.setOpt(p.name, o.key, !on); render(); }, '', 'sub');
+  });
+  // One plugin: its on/off row, its options, and (while it is on) its own page.
+  const pluginBlock = p => [ledRow(p.name, !T.isOff(p.name), () => flipPlugin(p), p.desc), ...optionRows(p), ...(!T.isOff(p.name) && p.tab ? p.tab.render() : [])];
+  const topTabs = () => ['Local', 'Global', ...(T.plugins.has('QuestCompleter') ? ['Quests'] : [])];
+  const localPage = s => {
+    const list = [...T.plugins.values()].filter(p => placeOf(p) === s && !p.hidden);
+    return list.length ? list.flatMap(pluginBlock) : [h('div', { className: 'twd-out', textContent: 'Nothing here.' })];
   };
-  const view = name => views[name] ? views[name]() : [...T.plugins.values()].find(p => p.tab?.name === name)?.tab.render() || [];
 
   const render = () => {
     T.onLog = null; if (!body) return;
-    const list = tabs();
-    if (!list.includes(tab)) tab = 'Notify';
-    const keep = body.scrollTop;
-    side.replaceChildren(...list.map(t => h('div', { className: 'twd-tab' + (t === tab ? ' on' : ''), textContent: t, onclick: () => { tab = t; useTab(t); body.scrollTop = 0; render(); } })));
-    try { body.replaceChildren(...view(tab)); } catch (e) { body.replaceChildren(h('div', { className: 'twd-out', textContent: 'Error: ' + (e.message || e) })); }
+    const top = topTabs(); if (!top.includes(nav.tab)) nav.tab = 'Local';
+    const keep = body.scrollTop, tab = nav.tab, subs = SUBS[tab];
+    side.replaceChildren(...top.map(t => h('div', { className: 'twd-tab' + (t === tab ? ' on' : ''), textContent: t, onclick: () => { goto(t); body.scrollTop = 0; render(); } })));
+    try {
+      let nodes;
+      if (subs) {
+        const cur = subs.includes(nav[tab]) ? nav[tab] : subs[0];
+        const chips = h('div', { className: 'twd-chips' }, ...subs.map(k => h('div', { className: 'twd-chip' + (k === cur ? ' on' : ''), textContent: k, onclick: () => { goto(tab, k); body.scrollTop = 0; render(); } })));
+        nodes = [chips, ...(tab === 'Local' ? localPage(cur) : views[NAME[cur] || cur]())];
+      } else nodes = pluginBlock(T.plugins.get('QuestCompleter'));
+      body.replaceChildren(...nodes);
+    } catch (e) { body.replaceChildren(h('div', { className: 'twd-out', textContent: 'Error: ' + (e.message || e) })); }
     body.scrollTop = keep;
   };
 
@@ -534,7 +545,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
       const cur = store.get(), block = (label ? '/* Twilight: ' + String(label).replace(/\*\//g, '').replace(/\s+/g, ' ').slice(0, 80) + ' */\n' : '') + String(css).trim();
       const next = (cur.trim() ? cur.replace(/\s+$/, '') + '\n\n' : '') + block + '\n';
       store.set(next); applyCss(next);
-      if (popup.isOpen() && POP.view === 'Menu' && tab === 'CSS') render();
+      if (popup.isOpen() && POP.view === 'Menu' && nav.tab === 'Global' && nav.Global === 'CSS') render();
     },
   };
 
