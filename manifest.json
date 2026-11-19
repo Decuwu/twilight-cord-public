@@ -1,5 +1,5 @@
 {
-  "version": "1.14.1",
+  "version": "1.15.0",
   "files": [
     "core.js",
     "debug.js",
@@ -10,7 +10,6 @@
     "plugins/clonerTest.js",
     "plugins/emojiStealer.js",
     "plugins/friendNotifier.js",
-    "plugins/glassTheme.js",
     "plugins/hello.js",
     "plugins/imageZoom.js",
     "plugins/messageLogger.js",
@@ -30,7 +29,6 @@
     "plugins/translate.js",
     "plugins/typingSpeed.js",
     "plugins/viewIcons.js",
-    "plugins/voiceLog.js",
     "plugins/windowButtons.js"
   ]
 }

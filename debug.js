@@ -140,10 +140,10 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
   // Parent categories: tools and plugins are listed under these headings.
   const GROUPS = ['Messages', 'Notifiers', 'Assistant', 'Appearance', 'Servers', 'Privacy', 'Media', 'Housekeeping'];
   const GROUP_OF = { MessageLogger: 'Messages', MessageMenu: 'Messages', Translate: 'Messages', Snippets: 'Messages', ClearURLs: 'Messages',
-    FriendNotifier: 'Notifiers', VoiceLog: 'Notifiers', Assistant: 'Assistant', Generated: 'Assistant',
-    GlassTheme: 'Appearance', ThemeMaker: 'Appearance', ImageZoom: 'Appearance', ViewIcons: 'Appearance',
+    FriendNotifier: 'Notifiers', Assistant: 'Assistant', Generated: 'Assistant',
+    ThemeMaker: 'Appearance', ImageZoom: 'Appearance', ViewIcons: 'Appearance',
     ClearNotifications: 'Servers', QuickServerMute: 'Servers',
-    NoTrack: 'Privacy', SilentTyping: 'Privacy', Petpet: 'Media', QuestCompleter: 'Housekeeping', ClonerTest: 'Housekeeping', Probe: 'Housekeeping', Hello: 'Housekeeping' };
+    NoTrack: 'Privacy', SilentTyping: 'Privacy', Petpet: 'Media', ClonerTest: 'Housekeeping', Probe: 'Housekeeping', Hello: 'Housekeeping' };
   const groupOf = p => p.group || GROUP_OF[p.name] || 'Housekeeping';
   const byGroup = list => GROUPS.map(g => [g, list.filter(x => groupOf(x.p || x) === g)]).filter(([, l]) => l.length);
 
@@ -308,13 +308,13 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
   };
 
   // ---- Menu layout: three tabs ----
-  // Local = things that act on what you are looking at, in submenus (Self, Look, Privacy, Channel, Discord). Global = Twilight itself (settings, plugins, tools, developer pages). Quests = the quest completer.
+  // Local = things that act on what you are looking at, in submenus (Self, Look, Privacy, Channel, Friends, Discord). Global = Twilight itself (settings, plugins, tools, developer pages). A plugin with a `page` name gets its own top tab.
   const PLACE = { Tags: 'Self', 'Tag commands': 'Self', Snippets: 'Self', TypingSpeed: 'Self', 'Window buttons': 'Self',
-    GlassTheme: 'Look', ThemeMaker: 'Look', ImageZoom: 'Look', ViewIcons: 'Look',
+    ThemeMaker: 'Look', ImageZoom: 'Look', ViewIcons: 'Look',
     NoTrack: 'Privacy', SilentTyping: 'Privacy',
     MessageLogger: 'Channel', Translate: 'Channel', ClearURLs: 'Channel', StaffTags: 'Channel', RoleDividers: 'Channel', PlatformIndicators: 'Channel', MessageMenu: 'Channel', Petpet: 'Channel',
-    FriendNotifier: 'Discord', VoiceLog: 'Discord', QuickServerMute: 'Discord', ClearNotifications: 'Discord', EmojiStealer: 'Discord', Assistant: 'Discord', Generated: 'Discord' };
-  const SUBS = { Local: ['Self', 'Look', 'Privacy', 'Channel', 'Discord'], Global: ['General', 'Plugins', 'Notify', 'CSS', 'Console', 'Cost', 'Info'] };
+    FriendNotifier: 'Friends', QuickServerMute: 'Discord', ClearNotifications: 'Discord', EmojiStealer: 'Discord', Assistant: 'Discord', Generated: 'Discord' };
+  const SUBS = { Local: ['Self', 'Look', 'Privacy', 'Channel', 'Friends', 'Discord'], Global: ['General', 'Plugins', 'Notify', 'CSS', 'Console', 'Cost', 'Info'] };
   const NAME = { General: 'Tools' }; // Global > General is the old Tools page
   const nav = Object.assign({ tab: 'Local', Local: 'Self', Global: 'General' }, T.ls.get('menuNav', {}));
   const goto = (t, s) => { nav.tab = t; if (s) nav[t] = s; T.ls.set('menuNav', nav); };
@@ -336,19 +336,20 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
   });
   // One plugin: its on/off row, its options, and (while it is on) its own page.
   const pluginBlock = p => [ledRow(p.name, !T.isOff(p.name), () => flipPlugin(p), p.desc), ...optionRows(p), ...(!T.isOff(p.name) && p.tab ? p.tab.render() : [])];
-  const topTabs = () => ['Local', 'Global', ...(T.plugins.has('QuestCompleter') ? ['Quests'] : [])];
+  const pagePlugins = () => [...T.plugins.values()].filter(p => p.page);
+  const topTabs = () => ['Local', 'Global', ...pagePlugins().map(p => p.page)];
   const localPage = s => {
     const list = [...T.plugins.values()].filter(p => placeOf(p) === s && !p.hidden);
     return list.length ? list.flatMap(pluginBlock) : [h('div', { className: 'twd-out', textContent: 'Nothing here.' })];
   };
 
-  // Search: matches plugin names, descriptions, option labels and the rows of Tools / Notify / Quests. Page names show as jump chips.
+  // Search: matches plugin names, descriptions, option labels and the rows of Tools / Notify / plugin pages. Page names show as jump chips.
   let query = '', searchMode = false; // Search is the third header tab (Chat | Menu | Search); it reuses the Menu pane
   const setSearch = on => { searchMode = on; if (!on) { query = ''; if (searchIn) searchIn.value = ''; } if (searchIn) searchIn.style.display = on ? '' : 'none'; for (const [n, t] of Object.entries(POP.tabEls)) t.classList.toggle('on', n === (on && POP.view === 'Menu' ? 'Search' : POP.view)); };
   const hit = (n, q) => (n.textContent || '').toLowerCase().includes(q);
   const searchNodes = q => {
     const out = [], jumps = [], add = (label, nodes) => { if (nodes.length) out.push(sec(label), ...nodes); };
-    const pages = [...SUBS.Local.map(k => ['Local', k]), ...SUBS.Global.map(k => ['Global', k]), ...(T.plugins.has('QuestCompleter') ? [['Quests', null]] : [])];
+    const pages = [...SUBS.Local.map(k => ['Local', k]), ...SUBS.Global.map(k => ['Global', k]), ...pagePlugins().map(p => [p.page, null])];
     for (const [t, k] of pages) if ((k || t).toLowerCase().includes(q)) jumps.push(h('div', { className: 'twd-chip', textContent: k ? `${t} › ${k}` : t, onclick: () => { setSearch(false); goto(t, k); render(); } }));
     for (const k of SUBS.Local) {
       const nodes = [];
@@ -359,8 +360,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
       add('Local › ' + k, nodes);
     }
     for (const k of ['General', 'Notify']) { try { add('Global › ' + k, views[NAME[k] || k]().filter(n => n.className !== 'twd-sec' && hit(n, q))); } catch {} }
-    const qc = T.plugins.get('QuestCompleter');
-    if (qc) { const whole = 'quests quest completer'.includes(q), block = pluginBlock(qc); add('Quests', whole ? block : block.filter(n => hit(n, q))); }
+    for (const pp of pagePlugins()) { const whole = `${pp.page} ${pp.name}`.toLowerCase().includes(q), block = pluginBlock(pp); add(pp.page, whole ? block : block.filter(n => hit(n, q))); }
     return [...(jumps.length ? [h('div', { className: 'twd-chips' }, ...jumps)] : []), ...(out.length || jumps.length ? out : [h('div', { className: 'twd-out', textContent: 'No match for “' + query.trim() + '”.' })])];
   };
 
@@ -377,7 +377,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
         const cur = subs.includes(nav[tab]) ? nav[tab] : subs[0];
         const chips = h('div', { className: 'twd-chips' }, ...subs.map(k => h('div', { className: 'twd-chip' + (k === cur ? ' on' : ''), textContent: k, onclick: () => { goto(tab, k); body.scrollTop = 0; render(); } })));
         nodes = [chips, ...(tab === 'Local' ? localPage(cur) : views[NAME[cur] || cur]())];
-      } else nodes = pluginBlock(T.plugins.get('QuestCompleter'));
+      } else nodes = pluginBlock(pagePlugins().find(p => p.page === tab));
       content.replaceChildren(...nodes);
     } catch (e) { content.replaceChildren(h('div', { className: 'twd-out', textContent: 'Error: ' + (e.message || e) })); }
     body.scrollTop = keep;

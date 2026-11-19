@@ -477,7 +477,7 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
     setLite(on) {
       ls.set('lite', !!on); document.documentElement.toggleAttribute('data-tw-lite', !!on);
       for (const p of plugins.values()) if (p.heavy && !isOff(p.name)) { try { cur = p.name; on ? p.stop?.() : p.start?.(); } catch (e) { console.warn('[twilight] lite', p.name, e); } finally { cur = null; } }
-      plugins.get('GlassTheme')?.apply?.(); window.Twilight.debug?.refresh?.();
+      window.Twilight.debug?.refresh?.();
     },
     suggestLite(why) { console.warn(`[twilight] ${why}`); try { this.notify('Discord is stuttering', 'Try Tools > Housekeeping > Ultra lightweight mode (' + why + ')', 8000, 'warn'); } catch {} },
     scoped, cost, timed, every: (name, ms, f) => { const id = _si.call(window, timed(name, f), ms); return () => clearInterval(id); },

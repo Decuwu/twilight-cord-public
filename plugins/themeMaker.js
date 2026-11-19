@@ -39,11 +39,28 @@ Twilight.definePlugin({
       ];
     },
   },
+  // Names of Discord's background colour variables, found by reading its style sheets (used for the background tint).
+  bgNames() {
+    if (this.names) return this.names;
+    const names = new Set();
+    for (const sheet of document.styleSheets) {
+      let rules; try { rules = sheet.cssRules; } catch { continue; }
+      for (const r of rules || []) {
+        const st = r.style; if (!st) continue;
+        for (let i = 0; i < st.length; i++) {
+          const n = st[i];
+          if (/^--(background-|bg-|chat-background|channeltextarea-background|input-background|home-background)/.test(n) &&
+              !/hover|active|selected|pressed|accent|brand|danger|positive|warning|mention|modifier|scrim/.test(n.replace('app-frame', '')) && !/overlay/.test(n.replace('app-frame', ''))) names.add(n);
+        }
+      }
+    }
+    return this.names = [...names];
+  },
   css(s) {
     const D = this.DEFAULT, out = [];
     if (s.accent !== D.accent) out.push(`:root{--brand-500:${s.accent}!important;--brand-360:${s.accent}!important;--text-link:${s.accent}!important;--interactive-active:${s.accent}!important}`);
     if (s.tintPct > 0) {
-      const names = Twilight.plugins.get('GlassTheme')?.bgNames?.() || [], cs = getComputedStyle(document.documentElement), decl = [];
+      const names = this.bgNames(), cs = getComputedStyle(document.documentElement), decl = [];
       for (const n of names) { const v = cs.getPropertyValue(n).trim(); if (v && CSS.supports('color', v)) decl.push(`${n}:color-mix(in srgb,${s.tint} ${s.tintPct}%,${v})!important`); }
       if (decl.length) out.push(`:root,body,#app-mount,[class*="theme-"]{${decl.join(';')}}`);
     }

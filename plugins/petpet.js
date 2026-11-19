@@ -12,7 +12,8 @@ function petFrames(avatar, hand, S, N, mk) {
     const c = mk(S, S), g = c.getContext('2d');
     g.save(); g.beginPath(); g.ellipse((ox + w / 2) * S, (oy + hh / 2) * S, w * S / 2, hh * S / 2, 0, 0, 6.283); g.clip();
     g.drawImage(avatar, ox * S, oy * S, w * S, hh * S); g.restore();
-    g.drawImage(hand, Math.min(4, sq) * 112, 0, 112, 112, 0, Math.round(sq * 6 * k), S, S);
+    const hs = 0.62; // the hand is drawn smaller than the picture so it does not hide the avatar
+    g.drawImage(hand, Math.min(4, sq) * 112, 0, 112, 112, 0, Math.round(sq * 6 * k * hs), S * hs, S * hs);
     frames.push(g.getImageData(0, 0, S, S));
   }
   return frames;
@@ -48,12 +49,17 @@ Twilight.definePlugin({
   // who? text may be empty (current DM), a user ID, a name or an @mention
   resolve(text) {
     const T = Twilight, S = n => T.findStore(n), us = S('UserStore');
-    text = (text || '').replace(/^\/petpet/i, '').trim().replace(/^<@!?(\d+)>$/, '$1').replace(/^@/, '');
+    text = (text || '').replace(/[\u200b\ufeff]/g, '').replace(/^\/petpet/i, '').trim().replace(/^<@!?(\d+)>$/, '$1').replace(/^@/, '');
     if (/^\d{15,}$/.test(text)) return us?.getUser?.(text);
     if (text) {
       const all = Object.values(us?.getUsers?.() || {}), t = text.toLowerCase();
-      return all.find(u => (u.username || '').toLowerCase() === t || (u.globalName || '').toLowerCase() === t)
-        || all.find(u => (u.username || '').toLowerCase().startsWith(t) || (u.globalName || '').toLowerCase().startsWith(t));
+      const exact = all.find(u => (u.username || '').toLowerCase() === t || (u.globalName || '').toLowerCase() === t);
+      if (exact) return exact;
+      try { // a server nickname (what a picked @mention shows in a server)
+        const gid = S('SelectedGuildStore')?.getGuildId?.(), m = gid && S('GuildMemberStore')?.getMembers?.(gid)?.find(x => (x.nick || '').toLowerCase() === t);
+        if (m) return us?.getUser?.(m.userId);
+      } catch {}
+      return all.find(u => (u.username || '').toLowerCase().startsWith(t) || (u.globalName || '').toLowerCase().startsWith(t));
     }
     const ch = S('ChannelStore')?.getChannel?.(S('SelectedChannelStore')?.getChannelId?.());
     const id = ch?.type === 1 ? ch.recipients?.[0] : null;
@@ -109,7 +115,7 @@ Twilight.definePlugin({
   start() {
     const me = this;
     // Shows up in Discord's slash-command list (Twilight app) through the Tag commands plugin.
-    Twilight.slash.add({ name: 'petpet', id: '9000000000000000015', desc: 'Make a pet-pet GIF of someone’s avatar', opts: [{ name: 'user', description: 'Name, @name or user ID (empty = this DM)', required: false, max_length: 64 }], run: v => me.run(v.user) });
+    Twilight.slash.add({ name: 'petpet', id: '9000000000000000015', desc: 'Make a pet-pet GIF of someone’s avatar', opts: [{ name: 'user', type: 6, description: 'Who to pet (pick a user; empty = the person in this DM)', required: false }], run: v => me.run(v.user) });
     this.click = e => {
       if (!e.altKey || !e.shiftKey) return;
       const m = (e.target.closest?.('img')?.src || '').match(/\/avatars\/(\d+)\//);

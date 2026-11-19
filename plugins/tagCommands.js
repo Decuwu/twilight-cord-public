@@ -19,7 +19,7 @@ Twilight.definePlugin({
   build() {
     const me = this, APP = me.APP, ver = '9000000000000000100', names = me.tagNames();
     me.sig = me.sigNow();
-    const opt = o => { const r = { type: 3, name: o.name, description: o.description, required: !!o.required, max_length: o.max_length, description_localized: o.description, name_localized: o.name }; if (o.tags && names.length) r.choices = names.map(n => ({ name: n, value: n })); return r; };
+    const opt = o => { const r = { type: o.type || 3, name: o.name, description: o.description, required: !!o.required, ...(o.type ? {} : { max_length: o.max_length }), description_localized: o.description, name_localized: o.name }; if (o.tags && names.length) r.choices = names.map(n => ({ name: n, value: n })); return r; };
     const commands = {};
     for (const c of me.all()) {
       const raw = c.opts.map(opt);
