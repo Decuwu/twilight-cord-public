@@ -34,7 +34,7 @@ Twilight.definePlugin({
     };
     const kick = () => { raf ||= requestAnimationFrame(draw); };
     // Shift state comes from key events (and is corrected by every mouse move), so a stray event can't switch it off by itself.
-    this.move = e => { pt = { x: e.clientX, y: e.clientY }; shift = e.shiftKey; kick(); };
+    this.move = e => { pt = { x: e.clientX, y: e.clientY }; shift = e.shiftKey; if (shift || shown) kick(); }; // no frame work for ordinary mouse moves
     this.down = e => { if (e.key === 'Shift') { shift = true; kick(); } };
     this.up = e => { if (e.key === 'Shift') { shift = false; kick(); } };
     this.blur = () => { shift = false; kick(); };

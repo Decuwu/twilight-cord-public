@@ -1,9 +1,9 @@
 // Minimise / maximise / close in the top right, restyled as macOS-style round buttons (red close, yellow minimise, green maximise).
-// Twilight does the work itself, so they keep working even in the see-through "Blur" window mode, where Discord's own buttons do nothing.
+// Twilight does the work itself through the main process (one click = one small request; nothing runs in between).
 Twilight.definePlugin({
   name: 'Window buttons',
-  vs: 'Plain Windows buttons (which do nothing in Blur mode)',
-  desc: 'macOS-style window buttons that always work',
+  vs: 'Plain Windows buttons',
+  desc: 'macOS-style round window buttons (close, minimise, maximise)',
   start() {
     const T = Twilight, me = this;
     const B = '[class*="winButtons"] > [class*="winButton"]', MM = '[class*="winButtons"] > [class*="winButtonMinMax"]';

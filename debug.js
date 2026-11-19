@@ -731,9 +731,8 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
         // Discord's own Ctrl+R can be switched off in some builds: reload the page (and Twilight) ourselves.
         else if ((e.ctrlKey || e.metaKey) && !e.altKey && e.code === 'KeyR') { e.preventDefault(); e.stopPropagation(); location.reload(); }
       }, true);
-      let timer;
-      new MutationObserver(() => { timer ||= setTimeout(() => { timer = 0; injectSettings(); injectLists(); }, 500); })
-        .observe(document.body, { childList: true, subtree: true });
+      // Twilight's rows (settings sidebar, DM list, friends list) are put back after Discord redraws: through core's one shared page watcher.
+      T._domWatch(() => { injectSettings(); injectLists(); }, 500);
       injectButton();
     },
   };

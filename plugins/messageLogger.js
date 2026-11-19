@@ -8,8 +8,10 @@ Twilight.definePlugin({
   desc: 'Shows deleted messages (red text) and old versions of edited messages (yellow text) in chat, and logs both',
   LIMIT: 200, HTML_KEEP: 50, HTML_MAX: 30000,
   keyOf: e => e.at + ':' + e.id,
-  htmlGet() { try { return JSON.parse(localStorage.getItem('twilight-msghtml') || '{}'); } catch { return {}; } },
-  htmlSet(o) { try { localStorage.setItem('twilight-msghtml', JSON.stringify(o)); } catch {} },
+  // Saved copies live in Twilight.ls.local (Discord deletes window.localStorage after start-up, so a plain localStorage call here
+  // silently saved nothing before 1.15.5). Not in settings.json: up to HTML_KEEP x HTML_MAX of HTML would make every settings save heavy.
+  htmlGet() { const o = Twilight.ls.local.get('msghtml', null); return o && typeof o === 'object' ? o : {}; },
+  htmlSet(o) { Twilight.ls.local.set('msghtml', o); },
   // Takes a message's on-screen copy off the page (all copies of that log entry).
   removeGhost(at, id) { for (const g of [...(this.ghosts || [])]) if (g.dataset.twId === String(id) && (at == null || g.dataset.twAt === String(at))) { g.remove(); this.ghosts.delete(g); } },
   // Removes one log entry together with its saved copy and the message it put on screen.

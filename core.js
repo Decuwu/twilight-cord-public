@@ -168,7 +168,7 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
   // fall back to an iframe's copy, and always keep a memory copy so switches work even if nothing can be saved.
   let storage = null, triedIframe = false;
   try { storage = window.localStorage; } catch {}
-  const mem = new Map();
+  const mem = new Map(), localMem = new Map();
   // Auto-save: every setting is also written to settings.json next to Twilight-Cord (through the main process), and read back on start.
   const seed = window.__twSeed || {}; try { delete window.__twSeed; } catch {}
   for (const k of Object.keys(seed)) mem.set(k, seed[k]);
@@ -196,13 +196,24 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
     set: (k, v) => { mem.set(k, v); try { getStorage()?.setItem('twilight-' + k, JSON.stringify(v)); } catch {} saveSoon(); },
     persistent: () => !!getStorage(),
     file: () => ({ ok: saveOk, at: savedAt }),
+    // Bigger data that should survive a restart but is not worth rewriting settings.json for on every change (MessageLogger's saved
+    // copies). Lives in the storage grabbed above (plugins cannot use localStorage themselves: Discord deletes it after start-up).
+    local: {
+      get: (k, d) => { // parsed once, then served from memory
+        if (localMem.has(k)) return localMem.get(k);
+        let v; try { const t = getStorage()?.getItem('twilight-local-' + k); v = t == null ? undefined : JSON.parse(t); } catch {}
+        if (v === undefined) return d;
+        localMem.set(k, v); return v;
+      },
+      set: (k, v) => { localMem.set(k, v); try { getStorage()?.setItem('twilight-local-' + k, JSON.stringify(v)); } catch {} },
+    },
   };
   // First run after the update: bring settings that only exist in Discord's storage into the file too.
   try {
     const st = getStorage(); let moved = 0;
     for (let i = 0; st && i < st.length; i++) {
       const k = st.key(i);
-      if (k?.startsWith('twilight-') && !mem.has(k.slice(9))) { try { mem.set(k.slice(9), JSON.parse(st.getItem(k))); moved++; } catch {} }
+      if (k?.startsWith('twilight-') && !k.startsWith('twilight-local-') && !mem.has(k.slice(9))) { try { mem.set(k.slice(9), JSON.parse(st.getItem(k))); moved++; } catch {} }
     }
     if (moved || !Object.keys(seed).length) setTimeout(saveSoon, 3000);
   } catch {}
@@ -324,8 +335,19 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
   const rest = () => restMod ||= find(m => typeof m?.post === 'function' && typeof m.get === 'function' && typeof m.getAPIBaseURL === 'function')
     || find(m => typeof m?.post === 'function' && typeof m.get === 'function' && typeof m.patch === 'function' && typeof m.del === 'function');
 
+  // ---- one shared page watcher: Discord redraws all the time, and every MutationObserver on the whole page makes the browser record
+  // every change once more. So there is exactly one, and each user (message scanner, menu rows, plugins via Twilight.onDom) gets a
+  // throttled call: at most one per `ms`, and nothing at all while Discord's page is not changing. ----
+  const domFns = new Set(); let domMO = null;
+  const domWatch = (fn, ms = 300) => {
+    const w = { fn, ms, t: 0 }; domFns.add(w);
+    const fire = () => { w.t = 0; try { w.fn(); } catch (e) { console.warn('[twilight] page watcher', e); } };
+    w.kick = () => { w.t ||= _st(fire, w.ms); };
+    if (!domMO && document.body) { domMO = new _MO(() => { for (const x of domFns) x.kick(); }); domMO.observe(document.body, { childList: true, subtree: true }); }
+    return () => { clearTimeout(w.t); domFns.delete(w); if (!domFns.size && domMO) { domMO.disconnect(); domMO = null; } };
+  };
   // ---- message scanner: one shared, throttled look at the chat for every plugin that decorates messages ----
-  const scanners = new Map(), seenBy = new WeakMap(); let scanMO, scanT;
+  const scanners = new Map(), seenBy = new WeakMap(); let scanStop, scanT;
   const msgInfo = li => { const m = /^chat-messages-(\d+)-(\d+)$/.exec(li?.id || ''); return m ? { channelId: m[1], id: m[2], msg: findStore('MessageStore')?.getMessage?.(m[1], m[2]) } : null; };
   const scan = () => {
     scanT = 0;
@@ -337,9 +359,9 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
   const msgScan = {
     add(name, fn) {
       scanners.set(name, timed(name, fn));
-      if (!scanMO) { scanMO = new _MO(() => { scanT ||= _st(scan, 350); }); scanMO.observe(document.body, { childList: true, subtree: true }); }
+      scanStop ||= domWatch(scan, 350);
       scanT ||= _st(scan, 100);
-      return () => { scanners.delete(name); };
+      return () => { scanners.delete(name); if (!scanners.size) { scanStop?.(); scanStop = null; } };
     },
     again(name) { for (const li of document.querySelectorAll('li[id^="chat-messages-"]')) seenBy.get(li)?.delete(name); scanT ||= _st(scan, 50); },
     info: msgInfo,
@@ -381,22 +403,26 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
     add(name, fn) {
       ctxFns.set(name, timed(name, fn));
       if (!ctxMO) {
-        window.addEventListener('contextmenu', e => {
-          if (!ctxFns.size) return;
-          const items = itemsFor(e.target); ctxLast = { items, at: Date.now(), x: e.clientX, y: e.clientY, used: false };
-          if (items.length) _st(() => { if (ctxLast && !ctxLast.used && Date.now() - ctxLast.at < 700) { ctxLast.used = true; showOwn(items, ctxLast.x, ctxLast.y); } }, 260);
-        }, true);
-        window.addEventListener('mousedown', e => { if (ownMenu && !ownMenu.contains(e.target)) closeOwn(); }, true);
+        // The page is only watched for the 700 ms after a right-click (while Discord opens its menu), never the rest of the time.
+        let ctxOff = 0;
+        const unwatch = () => { clearTimeout(ctxOff); ctxMO.disconnect(); };
         ctxMO = new _MO(ms => {
-          if (!ctxLast?.items.length || ctxLast.used || Date.now() - ctxLast.at > 700) return;
+          if (!ctxLast?.items.length || ctxLast.used || Date.now() - ctxLast.at > 700) return unwatch();
           for (const m of ms) for (const n of m.addedNodes) {
             if (n.nodeType !== 1) continue;
             const menu = n.matches?.('[role="menu"]') ? n : n.querySelector?.('[role="menu"]');
-            if (menu && menu.querySelector('[role="menuitem"]') && !menu.closest('[class*="stream"],[class*="video"]')) { ctxLast.used = true; injectItems(menu, ctxLast.items); return; }
-            if (menu) { ctxLast.used = true; return; } // stream / video menus are left alone
+            if (menu && menu.querySelector('[role="menuitem"]') && !menu.closest('[class*="stream"],[class*="video"]')) { ctxLast.used = true; unwatch(); injectItems(menu, ctxLast.items); return; }
+            if (menu) { ctxLast.used = true; return unwatch(); } // stream / video menus are left alone
           }
         });
-        ctxMO.observe(document.body, { childList: true, subtree: true });
+        window.addEventListener('contextmenu', e => {
+          if (!ctxFns.size) return;
+          const items = itemsFor(e.target); ctxLast = { items, at: Date.now(), x: e.clientX, y: e.clientY, used: false };
+          if (!items.length) return;
+          unwatch(); ctxMO.observe(document.body, { childList: true, subtree: true }); ctxOff = _st(unwatch, 700);
+          _st(() => { if (ctxLast && !ctxLast.used && Date.now() - ctxLast.at < 700) { ctxLast.used = true; showOwn(items, ctxLast.x, ctxLast.y); } }, 260);
+        }, true);
+        window.addEventListener('mousedown', e => { if (ownMenu && !ownMenu.contains(e.target)) closeOwn(); }, true);
       }
       return () => ctxFns.delete(name);
     },
@@ -404,6 +430,9 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
 
   window.Twilight = {
     plugins, rest, msgScan, ctx, commands: new Map(),
+    // Run fn (throttled to one call per `ms`) whenever Discord changes the page; shares the one page watcher. Returns an undo function.
+    onDom: (name, fn, ms = 500) => domWatch(timed(name, fn), Math.max(100, ms)),
+    _domWatch: domWatch, // for the menu (not counted as a plugin in the Cost tab)
     // Native slash commands: a plugin adds { name, id, desc, opts:[{name,description,required,max_length}], run(values) }; the Tag commands plugin shows them in Discord's command list.
     slash: { cmds: new Map(), add(d) { this.cmds.set(d.name, d); this.onChange?.(); }, remove(n) { this.cmds.delete(n); this.onChange?.(); } }, // chat commands: name -> { help, run(args, channelId) }
     find, findAll,
@@ -434,13 +463,13 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
     waitFor(f, cb, timeout = 60000, onFail) {
       // One shared 1 s timer for every plugin that is waiting for a Discord module (each check walks all modules, so they must not each run their own).
       if (cur) { cb = timed(cur, cb); if (onFail) onFail = timed(cur, onFail); }
-      const w = { f, cb, onFail, t0: Date.now() };
+      const w = { f, cb, onFail, t0: Date.now(), timeout };
       waiters.add(w);
       if (!waitT) waitT = _si.call(window, () => {
         for (const x of [...waiters]) {
           let m; try { m = x.f === isDispatcher ? dispatcher() : find(x.f); } catch {}
           if (m) { waiters.delete(x); try { x.cb(m); } catch (e) { console.warn('[twilight] waitFor', e); } }
-          else if (Date.now() - x.t0 > timeout) { waiters.delete(x); try { x.onFail?.(); } catch {} }
+          else if (Date.now() - x.t0 > x.timeout) { waiters.delete(x); try { x.onFail?.(); } catch {} }
         }
         if (!waiters.size) { clearInterval(waitT); waitT = 0; }
       }, 1000);

@@ -17,12 +17,15 @@ Twilight.definePlugin({
       if (n.textContent !== t) n.textContent = t;
     };
     this.off = T.msgScan.add('PlatformIndicators', (li, info) => { const id = info?.msg?.author?.id, h = li.querySelector('[class*="username"]'); if (id && h) put(h.parentElement, id); });
-    this.stopT = T.every('PlatformIndicators', 4000, () => {
+    // Member list: refreshed when Discord redraws it (it does when someone's status changes), at most every 1.5 s, and not while
+    // Discord is minimised. No timer: an idle Discord costs nothing.
+    this.stopT = T.onDom('PlatformIndicators', () => {
+      if (document.hidden) return;
       for (const row of document.querySelectorAll('[data-list-item-id^="members"]')) {
         const uid = (row.dataset.listItemId.match(/(\d{15,})$/) || [])[1], name = row.querySelector('[class*="name"]');
         if (uid && name) put(name.parentElement, uid);
       }
-    });
+    }, 1500);
   },
   stop() { this.off?.(); this.stopT?.(); document.querySelectorAll('.tw-plat').forEach(n => n.remove()); },
 });

@@ -39,14 +39,21 @@ Twilight.definePlugin({
       MESSAGE_UPDATE: a => { const m = a.message, h = m && me.hist.get(m.id); if (h && m.content != null && m.content !== h.now) { h.old.push({ text: h.now, at: Date.now() }); h.now = m.content; } },
     }, 'MessageMenu');
 
-    // reminders: checked every 20 s (one tiny storage read)
-    me.stopTimer = T.every('MessageMenu', 20000, () => {
-      const list = T.ls.get('reminders', []), now = Date.now(), due = list.filter(r => r.at <= now);
-      if (!due.length) return;
-      T.ls.set('reminders', list.filter(r => r.at > now));
-      for (const r of due) T.notify('Reminder', r.preview, 12000, 'info');
-      T.debug.refresh();
-    });
+    // Reminders: one timer, set for the next one that is due (nothing runs when there are none). Long waits are re-checked every
+    // 6 hours at most, so a PC that slept still fires on time once it wakes.
+    let remT = 0;
+    me.schedule = () => {
+      clearTimeout(remT); remT = 0;
+      const list = T.ls.get('reminders', []); if (!list.length) return;
+      const next = Math.min(...list.map(r => r.at)), wait = Math.min(Math.max(0, next - Date.now()) + 50, 6 * 3600000);
+      remT = setTimeout(() => {
+        const all = T.ls.get('reminders', []), now = Date.now(), due = all.filter(r => r.at <= now);
+        if (due.length) { T.ls.set('reminders', all.filter(r => r.at > now)); for (const r of due) T.notify('Reminder', r.preview, 12000, 'info'); T.debug.refresh(); }
+        me.schedule();
+      }, wait);
+    };
+    me.schedule();
+    me.stopTimer = () => clearTimeout(remT);
 
     const link = (msg, ch) => `https://discord.com/channels/${ch?.guild_id || '@me'}/${msg.channel_id}/${msg.id}`;
     const openRemind = (info, msg) => {
@@ -56,7 +63,7 @@ Twilight.definePlugin({
       const set = ms => {
         const ch = T.findStore('ChannelStore')?.getChannel?.(msg.channel_id);
         T.ls.set('reminders', [...T.ls.get('reminders', []), { at: Date.now() + ms, channelId: msg.channel_id, guildId: ch?.guild_id, id: msg.id, preview: `${msg.author?.username || '?'}: ${(me.clean(msg) || '(attachment)').slice(0, 70)}` }]);
-        box.remove(); T.notify('Reminder set', `In ${ms >= 3600000 ? Math.round(ms / 360000) / 10 + ' h' : Math.round(ms / 60000) + ' min'}`, 2500, 'success');
+        box.remove(); me.schedule(); T.notify('Reminder set', `In ${ms >= 3600000 ? Math.round(ms / 360000) / 10 + ' h' : Math.round(ms / 60000) + ' min'}`, 2500, 'success');
       };
       const chip = (label, ms) => T.h('div', { className: 'twd-chip', textContent: label, onclick: () => set(ms), style: 'display:inline-block;margin:3px;padding:6px 10px;border-radius:14px;background:rgba(108,200,255,.16);cursor:pointer' });
       const mins = T.h('input', { placeholder: 'minutes', type: 'number', style: 'width:80px;margin-left:6px;padding:5px;border-radius:6px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.4);color:#fff' });
