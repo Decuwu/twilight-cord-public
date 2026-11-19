@@ -102,7 +102,7 @@ box-shadow:0 0 0 1px rgba(255,255,255,.22) inset,0 2px 12px rgba(108,200,255,.45
 .twp-body{position:relative;flex:1;min-height:0}
 html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}`;
 
-  let side, body, footer;
+  let side, body, content, searchIn, footer;
   const input = (placeholder, value = '') => h('input', { placeholder, value });
   const sec = t => h('div', { className: 'twd-sec', textContent: t });
   const info = (k, v) => h('div', { className: 'twd-row info' }, h('span', { textContent: k }), h('span', { textContent: String(v), style: 'color:#a9c4db' }));
@@ -342,20 +342,44 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     return list.length ? list.flatMap(pluginBlock) : [h('div', { className: 'twd-out', textContent: 'Nothing here.' })];
   };
 
+  // Search: matches plugin names, descriptions, option labels and the rows of Tools / Notify / Quests. Page names show as jump chips.
+  let query = '', searchMode = false; // Search is the third header tab (Chat | Menu | Search); it reuses the Menu pane
+  const setSearch = on => { searchMode = on; if (!on) { query = ''; if (searchIn) searchIn.value = ''; } if (searchIn) searchIn.style.display = on ? '' : 'none'; for (const [n, t] of Object.entries(POP.tabEls)) t.classList.toggle('on', n === (on && POP.view === 'Menu' ? 'Search' : POP.view)); };
+  const hit = (n, q) => (n.textContent || '').toLowerCase().includes(q);
+  const searchNodes = q => {
+    const out = [], jumps = [], add = (label, nodes) => { if (nodes.length) out.push(sec(label), ...nodes); };
+    const pages = [...SUBS.Local.map(k => ['Local', k]), ...SUBS.Global.map(k => ['Global', k]), ...(T.plugins.has('QuestCompleter') ? [['Quests', null]] : [])];
+    for (const [t, k] of pages) if ((k || t).toLowerCase().includes(q)) jumps.push(h('div', { className: 'twd-chip', textContent: k ? `${t} › ${k}` : t, onclick: () => { setSearch(false); goto(t, k); render(); } }));
+    for (const k of SUBS.Local) {
+      const nodes = [];
+      for (const p of [...T.plugins.values()].filter(p => placeOf(p) === k && !p.hidden)) {
+        const whole = `${p.name} ${p.desc || ''}`.toLowerCase().includes(q), block = pluginBlock(p);
+        nodes.push(...(whole ? block : block.filter(n => hit(n, q))));
+      }
+      add('Local › ' + k, nodes);
+    }
+    for (const k of ['General', 'Notify']) { try { add('Global › ' + k, views[NAME[k] || k]().filter(n => n.className !== 'twd-sec' && hit(n, q))); } catch {} }
+    const qc = T.plugins.get('QuestCompleter');
+    if (qc) { const whole = 'quests quest completer'.includes(q), block = pluginBlock(qc); add('Quests', whole ? block : block.filter(n => hit(n, q))); }
+    return [...(jumps.length ? [h('div', { className: 'twd-chips' }, ...jumps)] : []), ...(out.length || jumps.length ? out : [h('div', { className: 'twd-out', textContent: 'No match for “' + query.trim() + '”.' })])];
+  };
+
   const render = () => {
-    T.onLog = null; if (!body) return;
+    T.onLog = null; if (!body || !content) return;
     const top = topTabs(); if (!top.includes(nav.tab)) nav.tab = 'Local';
-    const keep = body.scrollTop, tab = nav.tab, subs = SUBS[tab];
-    side.replaceChildren(...top.map(t => h('div', { className: 'twd-tab' + (t === tab ? ' on' : ''), textContent: t, onclick: () => { goto(t); body.scrollTop = 0; render(); } })));
+    const keep = body.scrollTop, tab = nav.tab, subs = SUBS[tab], q = query.trim().toLowerCase();
+    searchIn.style.display = searchMode ? '' : 'none';
+    side.replaceChildren(...top.map(t => h('div', { className: 'twd-tab' + (t === tab && !searchMode ? ' on' : ''), textContent: t, onclick: () => { setSearch(false); goto(t); body.scrollTop = 0; render(); } })));
     try {
       let nodes;
-      if (subs) {
+      if (searchMode) nodes = q ? searchNodes(q) : [h('div', { className: 'twd-out', textContent: 'Type to search plugins, options and settings.' })];
+      else if (subs) {
         const cur = subs.includes(nav[tab]) ? nav[tab] : subs[0];
         const chips = h('div', { className: 'twd-chips' }, ...subs.map(k => h('div', { className: 'twd-chip' + (k === cur ? ' on' : ''), textContent: k, onclick: () => { goto(tab, k); body.scrollTop = 0; render(); } })));
         nodes = [chips, ...(tab === 'Local' ? localPage(cur) : views[NAME[cur] || cur]())];
       } else nodes = pluginBlock(T.plugins.get('QuestCompleter'));
-      body.replaceChildren(...nodes);
-    } catch (e) { body.replaceChildren(h('div', { className: 'twd-out', textContent: 'Error: ' + (e.message || e) })); }
+      content.replaceChildren(...nodes);
+    } catch (e) { content.replaceChildren(h('div', { className: 'twd-out', textContent: 'Error: ' + (e.message || e) })); }
     body.scrollTop = keep;
   };
 
@@ -405,9 +429,11 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
       if (!ensure(view)) return T.notify('Twilight', view + ' could not start', 3000, 'warn');
       POP.view = view; POP.box.dataset.view = view;
       for (const [n, v] of Object.entries(POP.views)) v.pane.f.style.display = n === view ? 'block' : 'none';
-      for (const [n, t] of Object.entries(POP.tabEls)) t.classList.toggle('on', n === view);
+      if (view !== 'Menu') searchMode = false;
+      for (const [n, t] of Object.entries(POP.tabEls)) t.classList.toggle('on', n === (view === 'Menu' && searchMode ? 'Search' : view));
       popup.sync(); if (view === 'Menu') render(); else T.onLog = null; // nothing keeps drawing while the Menu is not shown
       try { POP.views[view].focus?.(); } catch {}
+      if (view === 'Menu' && searchMode) setTimeout(() => { try { searchIn?.focus(); } catch {} }, 30);
       T.ls.set('popView', view);
     },
     sync() { const b = POP.box; if (!b) return; for (const [k, v] of Object.entries(themeVars())) b.style.setProperty('--tw-' + k, v); for (const v of Object.values(POP.views)) v.sync?.(); },
@@ -420,6 +446,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
       const b = POP.box; if (!b) return;
       for (const v of Object.values(POP.views)) { try { v.destroy?.(); } catch {} }
       T.win.remove(b); T.onLog = null; side = body = footer = null; releaseFocus(); b.remove();
+      searchMode = false; query = '';
       Object.assign(POP, { box: null, view: null, views: {}, host: null, prev: null, tabEls: {}, minBtn: null, menuRoot: null });
     },
   };
@@ -436,7 +463,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
       if (e.type === 'pointerdown') return T.win.raise(POP.box, e.target);
       if (e.type === 'keydown') {
         if (matches(e, T.debug.key)) { e.preventDefault(); e.stopPropagation(); return menuToggle(); }
-        if (e.key === 'Escape' && POP.view === 'Menu') { e.stopPropagation(); return menuToggle(false); }
+        if (e.key === 'Escape' && POP.view === 'Menu') { e.stopPropagation(); if (query) { query = ''; if (searchIn) searchIn.value = ''; return render(); } return menuToggle(false); }
       }
       e.stopPropagation();
     };
@@ -474,13 +501,17 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
 .twd-ft{background:var(--tw-side);border-top:1px solid var(--tw-line);color:var(--tw-muted)}.twd-ft b{color:var(--tw-muted)}
 .twd-body::-webkit-scrollbar,.twd-side::-webkit-scrollbar{width:14px}.twd-body::-webkit-scrollbar-thumb,.twd-side::-webkit-scrollbar-thumb{background:var(--tw-thumb);border:4px solid transparent;background-clip:padding-box;border-radius:8px}.twd-body::-webkit-scrollbar-track,.twd-side::-webkit-scrollbar-track{background:transparent}`;
   const mountMenu = pane => {
-    side = h('div', { className: 'twd-side' }); body = h('div', { className: 'twd-body' });
+    side = h('div', { className: 'twd-side' }); body = h('div', { className: 'twd-body' }); content = h('div');
+    searchIn = h('input', { placeholder: 'Search the menu…', value: query, style: 'margin-bottom:8px;display:none', oninput: () => { query = searchIn.value; body.scrollTop = 0; render(); },
+      onkeydown: e => { if (e.key === 'Escape' && searchIn.value) { e.stopPropagation(); e.preventDefault(); query = ''; searchIn.value = ''; render(); } } });
+    searchIn.style.display = searchMode ? '' : 'none';
+    body.append(searchIn, content);
     footer = h('div', { className: 'twd-ft' }, h('span', { textContent: `${T.debug.key.replace(/\b\w/g, c => c.toUpperCase())} toggle · Esc back` }), h('b', { textContent: 'v' + (T.debug.version || '?') }));
     const root = POP.menuRoot = h('div', { id: 'twd', className: 'twd open' }, h('div', { className: 'twd-main' }, side, body), footer);
     root.style.setProperty('--twd-h', parseInt(POP.box.style.height) + 'px');
     (pane.inline ? pane.body : pane.doc.head).append(h('style', { textContent: CSS + MENU_FIX + MENU_THEME })); pane.body.append(root);
     const sync = () => { if (!pane.inline) try { pane.doc.documentElement.style.cssText = T.theme.text(); } catch {} }; sync();
-    return { pane, sync, focus() { try { pane.f.contentWindow?.focus(); } catch {} }, destroy() { side = body = footer = null; POP.menuRoot = null; } };
+    return { pane, sync, focus() { try { pane.f.contentWindow?.focus(); } catch {} }, destroy() { side = body = content = searchIn = footer = null; POP.menuRoot = null; } };
   };
   const ensure = view => {
     if (POP.views[view]) return true;
@@ -494,7 +525,9 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     box.style.cssText = `left:${d.x}px;top:${d.y}px;width:${d.w}px;height:${d.h}px;${T.theme.text()}`;
     const btn = (t, title, fn) => h('span', { className: 'twp-b', textContent: t, title, onclick: fn });
     POP.tabEls = {}; const tabs = h('div', { className: 'twp-tabs' });
-    for (const n of hasChat() ? ['Chat', 'Menu'] : ['Menu']) { POP.tabEls[n] = h('div', { className: 'twp-t', textContent: n, onclick: () => popup.show(n) }); tabs.append(POP.tabEls[n]); }
+    for (const n of hasChat() ? ['Chat', 'Menu', 'Search'] : ['Menu', 'Search']) {
+      POP.tabEls[n] = h('div', { className: 'twp-t', textContent: n, onclick: () => { searchMode = n === 'Search'; popup.show(n === 'Search' ? 'Menu' : n); } }); tabs.append(POP.tabEls[n]);
+    }
     POP.minBtn = btn('–', 'Minimise', () => popup.minimize());
     const hd = h('div', { className: 'twp-hd', onpointerdown: drag, ondblclick: e => { if (!e.target.closest('.twp-b,.twp-t')) popup.minimize(); } },
       h('span', { className: 'twp-at', textContent: '@' }), h('b', { textContent: 'Twilight' }), tabs, h('span', { style: 'flex:1' }),
@@ -693,7 +726,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
       applyFx();
       window.addEventListener('keydown', e => {
         if (matches(e, T.debug.key)) { e.preventDefault(); e.stopPropagation(); toggle(); }
-        else if (e.key === 'Escape' && popup.isOpen() && POP.view === 'Menu') toggle(false);
+        else if (e.key === 'Escape' && popup.isOpen() && POP.view === 'Menu') { if (query) { query = ''; if (searchIn) searchIn.value = ''; render(); e.preventDefault(); } else toggle(false); }
         // Discord's own Ctrl+R can be switched off in some builds: reload the page (and Twilight) ourselves.
         else if ((e.ctrlKey || e.metaKey) && !e.altKey && e.code === 'KeyR') { e.preventDefault(); e.stopPropagation(); location.reload(); }
       }, true);
