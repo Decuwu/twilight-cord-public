@@ -172,6 +172,9 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
   // Auto-save: every setting is also written to settings.json next to Twilight-Cord (through the main process), and read back on start.
   const seed = window.__twSeed || {}; try { delete window.__twSeed; } catch {}
   for (const k of Object.keys(seed)) mem.set(k, seed[k]);
+  // A brand-new install: no settings.json yet and nothing saved in the browser storage either (used for defaults that differ for new users).
+  let fresh = !Object.keys(seed).length;
+  if (fresh) try { const st = window.localStorage; for (let i = 0; i < st.length; i++) if (st.key(i)?.startsWith('twilight-')) { fresh = false; break; } } catch {}
   let saveT, savedAt = 0, saveOk = null;
   const saveSoon = () => {
     clearTimeout(saveT);
@@ -195,6 +198,7 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
     },
     set: (k, v) => { mem.set(k, v); try { getStorage()?.setItem('twilight-' + k, JSON.stringify(v)); } catch {} saveSoon(); },
     persistent: () => !!getStorage(),
+    fresh: () => fresh,
     file: () => ({ ok: saveOk, at: savedAt }),
     // Bigger data that should survive a restart but is not worth rewriting settings.json for on every change (MessageLogger's saved
     // copies). Lives in the storage grabbed above (plugins cannot use localStorage themselves: Discord deletes it after start-up).
@@ -332,8 +336,11 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
 
   // Discord's own web client (the one every request goes through), so calls are signed in as you.
   let restMod;
-  const rest = () => restMod ||= find(m => typeof m?.post === 'function' && typeof m.get === 'function' && typeof m.getAPIBaseURL === 'function')
-    || find(m => typeof m?.post === 'function' && typeof m.get === 'function' && typeof m.patch === 'function' && typeof m.del === 'function');
+  // Discord's request module (get/post/put/patch/del). Discord also ships translation objects that answer ANY property name with a
+  // function (so they pass a plain "has .post" test and reply {locale, ast}); a made-up property name catches those.
+  const NOPE = '__twNope' + Math.random().toString(36).slice(2);
+  const rest = () => restMod ||= find(m => m[NOPE] === undefined && !m._dispatcher && !('Request' in m)
+    && ['get', 'post', 'put', 'patch', 'del'].every(k => typeof m[k] === 'function'));
 
   // ---- one shared page watcher: Discord redraws all the time, and every MutationObserver on the whole page makes the browser record
   // every change once more. So there is exactly one, and each user (message scanner, menu rows, plugins via Twilight.onDom) gets a

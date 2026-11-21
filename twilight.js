@@ -43,7 +43,7 @@ if (process.type === 'browser') {
       return `try{\n${src}\n}catch(e){console.error("[twilight] plugin ${name(n)}",e)}`;
     }).join('\n');
     const css = safe ? '' : (cfg.themes || []).map(n => read(`themes/${name(n)}.css`)).join('\n');
-    const opts = { version: json('manifest.json').version || '?', debugKey: cfg.debugKey || 'ctrl+f', safe, sizes, hasKey: false };
+    const opts = { version: json('manifest.json').version || '?', debugKey: cfg.debugKey, safe, sizes, hasKey: false };
     const seed = JSON.stringify(json('settings.json')).replace(/</g, '\\u003c');
     const body = `${read('core.js')}\n${read('debug.js')}\n${plugins}`;
     opts.kb = Math.round((body.length + css.length) / 1024);

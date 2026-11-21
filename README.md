@@ -6,7 +6,7 @@ A tiny Discord client mod for Discord Stable and Discord PTB: webpack patching, 
 - `twilight.js` – main-process loader + renderer preload + auto-updater
 - `core.js` – webpack hook, module patching, finders, plugin API, notifications
 - `manifest.json` – version and list of files the updater syncs
-- `debug.js` – debug menu (Ctrl+F or the Debug button next to Add Friend): test notifications, plugin start/stop, Quick CSS, webpack info
+- `debug.js` – debug menu (Ctrl+T or the Debug button next to Add Friend): test notifications, plugin start/stop, Quick CSS, webpack info
 - `config.json` – your settings (never overwritten by updates): repo, token, `debugKey`, `disabled` plugins, enabled `themes`
 - `plugins/*.js`, `themes/*.css`
 - `installer.js` – Windows installer for Discord Stable and/or PTB (packaged to an exe with `npm run build`)
@@ -24,7 +24,7 @@ The updater fetches `manifest.json` from the repo on each launch; if its version
 This repo is public, so no token is needed. (If you fork it, point `repo` in `config.json` at your own fork; for a private fork use a fine-grained token with **Contents: Read-only** limited to that repo.)
 To ship an update: change files, bump `version` in `manifest.json`, push. Next launch shows an "Updated" notification; press Ctrl+R to apply (restart Discord if `twilight.js` changed).
 Every file in `plugins/` loads automatically; list a plugin's file name (without `.js`) under `disabled` in `config.json` to turn it off. Themes still need to be listed under `themes`.
-Note: Ctrl+F is also Discord's search shortcut; change `debugKey` (e.g. `ctrl+shift+f`) if you want it back.
+The menu key is Ctrl+T on new installs (installs from before 1.16.0 keep Ctrl+F, which also opens Discord's search). Change it in the menu under Tools > Menu key (click, then press the keys you want), or set `debugKey` in `config.json`.
 
 ## Included plugins
 Switch any of them on/off (red/green LED) from the debug menu's Plugins tab; the choice is remembered.

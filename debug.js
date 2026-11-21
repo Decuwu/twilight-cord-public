@@ -1,4 +1,4 @@
-// Debug menu: toggle with the configured key (default Ctrl+F) or the "Debug" button next to Add Friend.
+// Debug menu: toggle with the configured key (default Ctrl+T; change it in Tools > Menu key) or the "Debug" button next to Add Friend.
 (() => {
   const T = window.Twilight;
   if (!T) return;
@@ -198,6 +198,9 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     Tools() {
       const acts = [...T.plugins.values()].filter(p => p.actionOnly || !T.isOff(p.name)).flatMap(p => (p.actions || []).map(a => [p, a]));
       return [
+        sec('Menu key'),
+        action(capturing ? 'Press the new key combination… (Esc cancels)' : 'Menu key: ' + keyName(T.debug.key), () => { capturing = true; render(); }, null, capturing ? '' : 'Click, then press the keys you want (F-keys work best: letters without Ctrl / Alt only work while you are not typing)'),
+        ...(T.ls.get('menuKey') ? [action('Reset menu key', () => { T.ls.set('menuKey', null); T.debug.key = T.debug.cfgKey; render(); }, null, 'Back to ' + keyName(T.debug.cfgKey))] : []),
         sec('Discord'),
         action('What is different from normal Discord', () => showDiff(), null, 'A small overlay: stock Discord vs Twilight Cord'),
         action('Reload Discord', () => location.reload(), null, 'Restarts the page, reloads Twilight-Cord'),
@@ -331,6 +334,10 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
   };
   const optionRows = p => (p.options || []).map(o => {
     const on = T.opt(p.name, o.key, o.def);
+    if (o.choices) { // a few named choices: click cycles through them
+      const i = Math.max(0, o.choices.findIndex(c => c[0] === on));
+      return action(o.label + ': ' + o.choices[i][1], () => { T.setOpt(p.name, o.key, o.choices[(i + 1) % o.choices.length][0]); render(); }, null, 'Click to change');
+    }
     return o.min != null ? slider(o.label, o.min, o.max, o.step || 1, on, v => String(v), v => T.setOpt(p.name, o.key, v))
       : ledRow(o.label, on, () => { T.setOpt(p.name, o.key, !on); render(); }, '', 'sub');
   });
@@ -457,11 +464,12 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     const p = POP.prev, editable = p && p.isConnected && (p.isContentEditable || /^(INPUT|TEXTAREA)$/.test(p.tagName));
     try { (editable ? p : document.querySelector('[role="textbox"][contenteditable="true"]'))?.focus({ preventScroll: true }); } catch {}
   };
-  // Keys typed in a frame never reach Discord (separate document); this also stops them bubbling further, and Ctrl+F / Esc still work inside the window.
+  // Keys typed in a frame never reach Discord (separate document); this also stops them bubbling further, and the menu key / Esc still work inside the window.
   const isolate = doc => {
     const on = e => {
       if (e.type === 'pointerdown') return T.win.raise(POP.box, e.target);
       if (e.type === 'keydown') {
+        if (captureKey(e)) return;
         if (matches(e, T.debug.key)) { e.preventDefault(); e.stopPropagation(); return menuToggle(); }
         if (e.key === 'Escape' && POP.view === 'Menu') { e.stopPropagation(); if (query) { query = ''; if (searchIn) searchIn.value = ''; return render(); } return menuToggle(false); }
       }
@@ -506,7 +514,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
       onkeydown: e => { if (e.key === 'Escape' && searchIn.value) { e.stopPropagation(); e.preventDefault(); query = ''; searchIn.value = ''; render(); } } });
     searchIn.style.display = searchMode ? '' : 'none';
     body.append(searchIn, content);
-    footer = h('div', { className: 'twd-ft' }, h('span', { textContent: `${T.debug.key.replace(/\b\w/g, c => c.toUpperCase())} toggle · Esc back` }), h('b', { textContent: 'v' + (T.debug.version || '?') }));
+    footer = h('div', { className: 'twd-ft' }, h('span', { textContent: `${keyName(T.debug.key)} toggle · Esc back` }), h('b', { textContent: 'v' + (T.debug.version || '?') }));
     const root = POP.menuRoot = h('div', { id: 'twd', className: 'twd open' }, h('div', { className: 'twd-main' }, side, body), footer);
     root.style.setProperty('--twd-h', parseInt(POP.box.style.height) + 'px');
     (pane.inline ? pane.body : pane.doc.head).append(h('style', { textContent: CSS + MENU_FIX + MENU_THEME })); pane.body.append(root);
@@ -556,7 +564,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     g.onpointermove = ev => applyBox({ x: r.left, y: r.top, w: clamp(r.width + ev.clientX - x0, 380, innerWidth - r.left), h: clamp(r.height + ev.clientY - y0, 300, innerHeight - r.top) });
     g.onpointerup = g.onpointercancel = () => { g.onpointermove = g.onpointerup = g.onpointercancel = null; saveBox(); };
   };
-  // Ctrl+F (or Esc on the Menu): open the Menu; from the Menu go back to the chat (which keeps its memory), or close if there is no chat.
+  // The menu key (or Esc on the Menu): open the Menu; from the Menu go back to the chat (which keeps its memory), or close if there is no chat.
   const menuToggle = force => {
     const open = popup.isOpen() && POP.view === 'Menu' && !POP.box.dataset.min, want = force ?? !open;
     if (want) return popup.open('Menu');
@@ -584,7 +592,25 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
 
   const matches = (e, spec) => {
     const p = spec.toLowerCase().split('+'), k = p.pop();
-    return e.key.toLowerCase() === k && e.ctrlKey === p.includes('ctrl') && e.shiftKey === p.includes('shift') && e.altKey === p.includes('alt');
+    if (e.key.toLowerCase() !== k || e.ctrlKey !== p.includes('ctrl') || e.shiftKey !== p.includes('shift') || e.altKey !== p.includes('alt') || e.metaKey) return false;
+    // A typing key (a letter, digit, symbol or space) without Ctrl / Alt is also just typing: then it only opens the menu while you are not in a
+    // text box. Keys like F5 always work.
+    const t = e.composedPath?.()[0] || e.target, typing = t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+    return !(typing && (k.length === 1 || k === 'space') && !p.includes('ctrl') && !p.includes('alt'));
+  };
+  const keyName = spec => String(spec).split('+').map(x => x.length === 1 || /^f\d+$/.test(x) ? x.toUpperCase() : x[0].toUpperCase() + x.slice(1)).join('+');
+  // "Change menu key": the next key combination pressed becomes the menu key (saved in Twilight's own storage). Esc cancels.
+  let capturing = false;
+  const captureKey = e => {
+    if (!capturing || e.type !== 'keydown') return false;
+    e.preventDefault(); e.stopPropagation();
+    if (['Shift', 'Control', 'Alt', 'Meta'].includes(e.key)) return true; // wait for the real key
+    capturing = false;
+    if (e.key === 'Escape') { T.notify('Menu key', 'Unchanged: ' + keyName(T.debug.key), 2500, 'info'); render(); return true; }
+    const k = e.key === ' ' ? 'space' : e.key.toLowerCase(), spec = [e.ctrlKey && 'ctrl', e.shiftKey && 'shift', e.altKey && 'alt', k].filter(Boolean).join('+');
+    T.debug.key = spec; T.ls.set('menuKey', spec); render();
+    T.notify('Menu key', 'Now ' + keyName(spec) + (!e.ctrlKey && !e.altKey && (k.length === 1 || k === 'space') ? ' (ignored while you type in a text box)' : ''), 4000, 'success');
+    return true;
   };
 
   // Overlay comparing stock Discord with this fork (built from the loaded plugins, so it is always current).
@@ -597,7 +623,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
       ['Updates', 'Discord only', 'Pulls its own updates from GitHub on start'],
       ['Settings', 'None for the mod', 'Auto-saved to a file next to the mod'],
       ['Notifications', 'Plain pop-ups', 'GTA-style toast, top right'],
-      ['Menu + console', 'None (DevTools only)', 'Ctrl+F menu with console, CSS, tools'],
+      ['Menu + console', 'None (DevTools only)', 'Ctrl+T menu with console, CSS, tools'],
     ];
     const plugins = [...T.plugins.values()].filter(p => p.vs);
     // Real usage: Discord Stable vs Discord PTB, measured by Windows (a short PowerShell run in the main process).
@@ -713,19 +739,22 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
 
   T.debug = {
     paintAsst: () => T.debug_paintAsst(),
-    key: 'ctrl+f',
+    key: 'ctrl+t',
     version: '?',
     toggle,
     refresh: () => popup.isOpen() && POP.view === 'Menu' && render(),
     page: () => (searchMode ? 'Search' : nav.tab), // which menu page is showing (a plugin can skip redraws while it is not on screen)
     init(opts = {}) {
-      T.debug.key = opts.debugKey || 'ctrl+f';
+      // Default menu key: Ctrl+T for new installs; installs from before 1.16.0 keep the Ctrl+F they had. Decided once and remembered.
+      let def = T.ls.get('menuKeyDefault'); if (!def) { def = T.ls.fresh() ? 'ctrl+t' : 'ctrl+f'; T.ls.set('menuKeyDefault', def); }
+      T.debug.cfgKey = opts.debugKey || def; T.debug.key = T.ls.get('menuKey') || T.debug.cfgKey; // set in the menu (Tools > Menu key), else config.json debugKey, else the default
       T.debug.version = opts.version || '?';
       T.debug.kb = opts.kb; T.debug.safe = !!opts.safe; T.debug.sizes = opts.sizes || {}; T.debug.hasKey = !!opts.hasKey;
       document.documentElement.append(h('style', { textContent: CSS + POPCSS }));
       applyCss(store.get());
       applyFx();
       window.addEventListener('keydown', e => {
+        if (captureKey(e)) return;
         if (matches(e, T.debug.key)) { e.preventDefault(); e.stopPropagation(); toggle(); }
         else if (e.key === 'Escape' && popup.isOpen() && POP.view === 'Menu') { if (query) { query = ''; if (searchIn) searchIn.value = ''; render(); e.preventDefault(); } else toggle(false); }
         // Discord's own Ctrl+R can be switched off in some builds: reload the page (and Twilight) ourselves.

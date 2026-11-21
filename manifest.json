@@ -1,5 +1,5 @@
 {
-  "version": "1.15.10",
+  "version": "1.16.0",
   "files": [
     "core.js",
     "debug.js",
@@ -28,7 +28,7 @@
     "plugins/translate.js",
     "plugins/typingSpeed.js",
     "plugins/viewIcons.js",
-    "themes/midnight.css",
-    "twilight.js"
+    "twilight.js",
+    "themes/midnight.css"
   ]
 }
