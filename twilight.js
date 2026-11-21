@@ -114,6 +114,50 @@ if (process.type === 'browser') {
     return `window.__twSeed=${seed};\n${body}\nTwilight.start(${JSON.stringify(css)},${JSON.stringify(opts)});\n//# sourceURL=twilight-bundle.js`;
   };
 
+  // ---- Start-up screen (1.18.0): Discord's small "Starting…" window, restyled the moment Twilight loads (about half a second
+  // in; Discord opens it before any mod can run, so the very first frame can still be Discord's). Only CSS plus a small text
+  // swap, so Discord's own updates keep working inside it. config.json "splash": { on, logo: 'moon' | 'discord' | 'custom', text }.
+  // A custom image (PNG, JPG, GIF, WebP) is saved as splash/custom.<ext> next to the mod.
+  const splashCfg = () => { const v = json('config.json').splash; return { on: true, logo: 'moon', text: '', ...(v && typeof v === 'object' ? v : {}) }; };
+  const splashImg = () => { try { const f = fs.readdirSync(path.join(__dirname, 'splash')).find(n => /^custom\.(png|jpe?g|gif|webp)$/i.test(n)); return f ? path.join(__dirname, 'splash', f) : null; } catch { return null; } };
+  const MOON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><defs><linearGradient id="m" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4fbff"/><stop offset="1" stop-color="#8fc9f5"/></linearGradient></defs>'
+    + '<path d="M128 28a76 76 0 1 0 44 118A62 62 0 0 1 128 28z" fill="url(#m)"/><circle cx="150" cy="62" r="4" fill="#dff4ff"/><circle cx="166" cy="98" r="2.6" fill="#b9ecff"/><circle cx="136" cy="40" r="2" fill="#b9ecff"/></svg>';
+  const splashCss = () => {
+    const c = splashCfg(), img = c.logo === 'custom' && splashImg(), label = `Twilight-${{ ptb: 'PTB', stable: 'Stable', canary: 'Canary' }[CHANNEL]} · v${json('manifest.json').version || '?'}`;
+    const logo = c.logo === 'discord' ? '' : `.splash-inner img{display:none!important}
+.splash-inner::before{content:'';display:block;width:${img ? 170 : 140}px;height:${img ? 170 : 140}px;margin:6px auto 40px;border-radius:${img ? 16 : 0}px;
+ background:url(${JSON.stringify(img ? require('url').pathToFileURL(img).href + '?' + fs.statSync(img).mtimeMs : 'data:image/svg+xml;base64,' + Buffer.from(MOON_SVG).toString('base64'))}) center/${img ? 'cover' : 'contain'} no-repeat;
+ ${img ? '' : 'animation:twMoon 3.6s ease-in-out infinite;'}filter:drop-shadow(0 0 16px rgba(108,200,255,.4))}
+@keyframes twMoon{0%,100%{transform:translateY(0) rotate(-5deg);filter:drop-shadow(0 0 10px rgba(108,200,255,.3))}50%{transform:translateY(-7px) rotate(3deg);filter:drop-shadow(0 0 26px rgba(108,200,255,.65))}}
+.splash-text{top:0!important}`;
+    return `html,body,#splash{background:radial-gradient(130% 95% at 50% 10%,#17305c 0%,#0b1430 42%,#07070d 100%)!important}
+#splash::before{content:'';position:absolute;inset:0;pointer-events:none;animation:twStars 3.2s ease-in-out infinite alternate;
+ background-image:radial-gradient(1.2px 1.2px at 14% 22%,#fff,transparent),radial-gradient(1px 1px at 82% 16%,#cfeaff,transparent),radial-gradient(1.4px 1.4px at 72% 70%,#fff,transparent),radial-gradient(1px 1px at 24% 78%,#b9ecff,transparent),radial-gradient(1px 1px at 52% 8%,#fff,transparent),radial-gradient(1.2px 1.2px at 90% 46%,#dff4ff,transparent),radial-gradient(1px 1px at 8% 52%,#fff,transparent)}
+@keyframes twStars{from{opacity:.35}to{opacity:.95}}
+${logo}
+.splash-status{color:#e6f6ff!important;letter-spacing:.01em}
+.splash-text>span:not(.splash-status){color:#7f9bb5!important}
+.progress .progress-bar{background:rgba(108,200,255,.12)!important}.progress .complete{background:linear-gradient(90deg,#3d7bfd,#6cc8ff)!important;box-shadow:0 0 8px rgba(108,200,255,.45)!important}
+#splash::after{content:${JSON.stringify(label.toUpperCase())};position:absolute;bottom:14px;left:0;right:0;text-align:center;font:700 10px var(--primary-font);letter-spacing:.18em;color:rgba(185,236,255,.5)}`;
+  };
+  // Custom text replaces Discord's status line ("Starting…", "Checking for updates…"); the progress line under it stays Discord's.
+  const splashJs = text => `(() => { const t = ${JSON.stringify(String(text || '').slice(0, 60))}; if (!t) return;
+    const fix = () => { const s = document.querySelector('.splash-status'); if (s && s.textContent !== t) s.textContent = t; };
+    fix(); new MutationObserver(fix).observe(document.getElementById('splash-mount') || document.body, { childList: true, subtree: true, characterData: true }); })();`;
+  const styledSplash = new WeakSet();
+  const styleSplash = w => {
+    try {
+      const wc = w.webContents; if (styledSplash.has(wc) || !/\/splash\/index\.html$/i.test(decodeURIComponent(require('url').parse(wc.getURL()).pathname || ''))) return;
+      const c = splashCfg(); if (!c.on) return; styledSplash.add(wc);
+      wc.insertCSS(splashCss()).then(() => wc.executeJavaScript(splashJs(c.text))).catch(() => {});
+    } catch {}
+  };
+  try {
+    const { BrowserWindow, app: eApp } = require('electron');
+    for (const w of BrowserWindow.getAllWindows()) { styleSplash(w); w.webContents.once('dom-ready', () => styleSplash(w)); }
+    eApp.on('browser-window-created', (_, w) => w.webContents.once('dom-ready', () => styleSplash(w)));
+  } catch (e) { note('splash style failed: ' + (e && e.message || e)); }
+
   // ---- windows: the first big window is the main one; every window made after it (video / chat pop-outs and the like) is a pop-out.
   // Pop-outs can be hidden from screen capture (config.json "hidePopouts", default true; menu: Tools > Housekeeping).
   // (Window glass, the see-through window and the custom snapper were removed in 1.12.0: the main window is Discord's normal window.)
@@ -191,6 +235,26 @@ if (process.type === 'browser') {
     if (c?.type === 'compare') {
       if (c.op === 'start') { try { fs.writeFileSync(path.join(__dirname, `stock-${CHANNEL}.flag`), 'one start of plain Discord, measured'); } catch (err) { return { ok: false, error: String(err.message || err).slice(0, 80) }; } setTimeout(() => restart('compare with stock'), 400); return { ok: true }; }
       return { ...json(`reports/compare-${CHANNEL}.json`), channel: CHANNEL, waiting: compareWaiting };
+    }
+    if (c?.type === 'splash') {
+      if (c.set && typeof c.set === 'object') {
+        const cfg = jsonStrict('config.json'); if (!cfg) return { ok: false, error: 'config.json unreadable, left alone' };
+        const v = { ...splashCfg() };
+        if (typeof c.set.on === 'boolean') v.on = c.set.on;
+        if (['moon', 'discord', 'custom'].includes(c.set.logo)) v.logo = c.set.logo;
+        if (typeof c.set.text === 'string') v.text = c.set.text.replace(/[\r\n]+/g, ' ').slice(0, 60);
+        cfg.splash = v; writeAtomic('config.json', JSON.stringify(cfg, null, 2));
+      }
+      // A picture chosen in the menu arrives as a data: URL (8 MB at most) and replaces the previous one.
+      if (typeof c.image === 'string') {
+        const m = /^data:image\/(png|jpeg|gif|webp);base64,([A-Za-z0-9+/=]+)$/.exec(c.image); if (!m) return { ok: false, error: 'PNG, JPG, GIF or WebP only' };
+        const buf = Buffer.from(m[2], 'base64'); if (buf.length > 8 * 1048576) return { ok: false, error: 'over 8 MB' };
+        const dir = path.join(__dirname, 'splash'); fs.mkdirSync(dir, { recursive: true });
+        for (const n of fs.readdirSync(dir)) if (/^custom\./i.test(n)) try { fs.rmSync(path.join(dir, n), { force: true }); } catch {}
+        fs.writeFileSync(path.join(dir, 'custom.' + (m[1] === 'jpeg' ? 'jpg' : m[1])), buf);
+        const cfg = jsonStrict('config.json'); if (cfg) { cfg.splash = { ...splashCfg(), logo: 'custom' }; writeAtomic('config.json', JSON.stringify(cfg, null, 2)); }
+      }
+      return { ...splashCfg(), hasImage: !!splashImg() };
     }
     if (c?.type === 'slim') {
       if (['games', 'krisp', 'disk'].includes(c.key) && typeof c.on === 'boolean') {

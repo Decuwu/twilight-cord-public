@@ -213,6 +213,25 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
               'A minute after Discord is minimised or covered, it gives back the memory it can (about 20 MB). Works straight away' + (T.cost.trims ? ` · trimmed ${T.cost.trims}× so far` : '')),
           ];
         })(),
+        sec('Start-up screen (the small "Starting…" window)'),
+        ...(() => {
+          const sp = T.debug.splash;
+          if (!sp) { T.cmd({ type: 'splash' }).then(r => { if (r) { T.debug.splash = r; T.debug.refresh(); } }); return [h('div', { className: 'twd-out', textContent: 'Loading…' })]; }
+          const save = async (set, image) => { const r = await T.cmd({ type: 'splash', set, image }, 15000); if (r && r.ok !== false) { T.debug.splash = r; T.notify('Start-up screen', 'Saved: you will see it the next time Discord starts', 2500, 'info'); } else T.notify('Start-up screen', r?.error || 'Could not save', 4000, 'error'); T.debug.refresh(); };
+          const LOGO = { moon: 'Twilight moon', discord: "Discord's own animation", custom: 'Your picture' }, order = ['moon', 'discord', ...(sp.hasImage ? ['custom'] : [])];
+          const pick = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp', style: 'display:none' });
+          pick.onchange = () => { const f = pick.files?.[0]; if (!f) return; if (f.size > 8 * 1048576) return T.notify('Start-up screen', 'Pictures up to 8 MB', 3500, 'warn'); const rd = new FileReader(); rd.onload = () => save(null, rd.result); rd.readAsDataURL(f); };
+          const text = input('Your own status text (empty = Discord\'s "Starting…")', sp.text || ''); text.maxLength = 60;
+          return [
+            ledRow('Twilight start-up screen', sp.on, () => save({ on: !sp.on }), 'Midnight colours, stars and a Twilight label instead of Discord\'s grey window'),
+            ...(sp.on ? [
+              action('Logo: ' + LOGO[sp.logo === 'custom' && !sp.hasImage ? 'moon' : sp.logo], () => save({ logo: order[(order.indexOf(sp.logo) + 1) % order.length] }), null, 'Click to change'),
+              action(sp.hasImage ? 'Choose a different picture…' : 'Use your own picture…', () => pick.click(), null, 'PNG, JPG, GIF or WebP, up to 8 MB. GIFs move'), pick,
+              text, action('Save status text', () => save({ text: text.value }), null, sp.text ? 'Now: ' + sp.text : 'Now: Discord\'s own text'),
+            ] : []),
+            action('Restart Discord to see it', () => T.cmd({ type: 'relaunch' }), null, 'Closes and reopens Discord'),
+          ];
+        })(),
         sec('Safe mode and cost'),
         ...(T.debug.safe ? [action('Leave safe mode', () => T.cmd({ type: 'safe', on: false }), null, 'Restarts Discord with all plugins back on')]
           : [action('Restart in safe mode', () => T.cmd({ type: 'safe', on: true }), null, 'Restarts Discord with no plugins or themes, in case something breaks')]),
