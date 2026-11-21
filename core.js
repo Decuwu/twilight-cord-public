@@ -265,14 +265,18 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
   window.setInterval = function (f, ...r) { return _si.call(this, cur && typeof f === 'function' ? timed(cur, f) : f, ...r); };
   window.setTimeout = function (f, ...r) { return _st.call(this, cur && typeof f === 'function' ? timed(cur, f) : f, ...r); };
   window.MutationObserver = class extends _MO { constructor(cb) { super(cur && typeof cb === 'function' ? timed(cur, cb) : cb); } };
-  // Stalls (long tasks) of the whole page: if Discord stutters a lot, suggest lightweight mode once in a while (never switched on by itself).
+  // Stalls (long tasks) of the whole page: if Discord stutters a lot AND Twilight's plugins are part of it, suggest lightweight mode once
+  // in a while (never switched on by itself). Not in the first 2 minutes (Discord's own start-up always stalls) and not while Discord is
+  // hidden; and only when plugins used real time in those 30 s, since lite mode cannot help with stalls that are Discord's own.
   try {
-    let hits = [], warned = 0;
+    let hits = [], warned = 0; const pluginMs = () => Object.values(cost.by).reduce((a, x) => a + x.ms, 0) + cost.flux.ms + cost.net.ms;
     new PerformanceObserver(l => {
-      for (const e of l.getEntries()) if (e.duration > 120) hits.push(Date.now());
-      hits = hits.filter(t => Date.now() - t < 30000); cost.stalls = hits;
+      for (const e of l.getEntries()) if (e.duration > 120 && performance.now() > 120000 && document.visibilityState === 'visible') hits.push([Date.now(), pluginMs()]);
+      hits = hits.filter(h => Date.now() - h[0] < 30000); cost.stalls = hits.map(h => h[0]);
       if (hits.length >= 8 && Date.now() - warned > 600000 && !window.Twilight?.lite?.()) {
-        warned = Date.now(); window.Twilight?.suggestLite?.(`${hits.length} long stalls in 30 s`);
+        const ours = pluginMs() - hits[0][1]; // plugin time since the first of these stalls (no timer needed)
+        if (ours < 300) { warned = Date.now(); console.warn(`[twilight] ${hits.length} long stalls in 30 s, but plugins used only ${Math.round(ours)} ms: Discord's own, not suggesting lite mode`); return; }
+        warned = Date.now(); window.Twilight?.suggestLite?.(`${hits.length} long stalls in 30 s, plugins used ${Math.round(ours)} ms`);
       }
     }).observe({ type: 'longtask' });
   } catch {}
