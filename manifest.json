@@ -1,5 +1,5 @@
 {
-  "version": "1.16.2",
+  "version": "1.17.0",
   "files": [
     "core.js",
     "debug.js",
@@ -29,6 +29,8 @@
     "plugins/typingSpeed.js",
     "plugins/viewIcons.js",
     "twilight.js",
-    "themes/midnight.css"
+    "themes/midnight.css",
+    "measure.js",
+    "stock.js"
   ]
 }

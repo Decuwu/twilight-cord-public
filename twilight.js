@@ -26,6 +26,69 @@ if (process.type === 'browser') {
     app.exit(0);
   };
 
+  // ---- Slim Discord (1.17.0): config.json "slim": { games, krisp, disk }. Each part is off unless switched on (Tools > Housekeeping),
+  // and takes effect at the next start. games: the in-game overlay, cloud game saves and the old game store never load.
+  // krisp: Krisp noise suppression never loads (Discord's standard noise suppression still works). Their files stay where
+  // Discord put them, so its updater has nothing to put back: they are only hidden from Discord when it goes to load them
+  // (a module it can't find counts as not installed). discord_hook stays, because Go Live game capture uses it.
+  // disk: a minute after start-up, older app-* builds, older installer packages and unused language packs are deleted.
+  let compareWaiting = false; // true while the Twilight half of a stock comparison is still being measured
+  const slimCfg = () => { const v = json('config.json').slim; return v && typeof v === 'object' ? v : {}; };
+  const SLIM = slimCfg();
+  const BLOCK = new Set([...(SLIM.games ? ['discord_overlay2', 'discord_desktop_overlay', 'discord_cloudsync', 'discord_dispatch'] : []), ...(SLIM.krisp ? ['discord_krisp'] : [])]);
+  const blockedPath = p => {
+    const v = String(p).replace(/\\/g, '/').toLowerCase();
+    for (const b of BLOCK) if (v === b || v.includes('/' + b + '-') || v.includes('/' + b + '/') || v.endsWith('/' + b) || v.endsWith('/' + b + '.node')) return b;
+    return null;
+  };
+  const slimSeen = new Set(), slimNote = (b, how) => { if (!slimSeen.has(b + how)) { slimSeen.add(b + how); note(`slim ${CHANNEL}: kept ${b} from loading (${how})`); } };
+  if (BLOCK.size) try {
+    // Main process: Discord loads the desktop overlay here itself (inside a try, so a missing module just means no overlay).
+    const Module = require('module'), load = Module._load;
+    Module._load = function (req, ...r) {
+      const b = typeof req === 'string' && req.includes('discord_') ? blockedPath(req) : null;
+      if (b) { slimNote(b, 'main'); const e = new Error(`Cannot find module '${req}' (switched off by Twilight)`); e.code = 'MODULE_NOT_FOUND'; throw e; }
+      return load.call(this, req, ...r);
+    };
+    // Windows: the page and pop-outs ask the main process where modules live (sync and async) and to install them. Discord
+    // registers these handlers after this file runs, so they are wrapped as they are registered.
+    const PATHS = 'DISCORD_NATIVE_MODULES_GET_PATHS', ONE = 'DISCORD_NATIVE_MODULES_GET_MODULE_PATH', INSTALL = 'DISCORD_NATIVE_MODULES_INSTALL';
+    const fix = (ch, v, name) => {
+      if (ch === ONE) { if (BLOCK.has(name)) { slimNote(name, 'path'); return null; } return v; }
+      if (ch === PATHS && v && Array.isArray(v.browserModulePaths)) return { ...v, browserModulePaths: v.browserModulePaths.filter(x => !blockedPath(x)) };
+      return v;
+    };
+    const on = ipcMain.on.bind(ipcMain), handle = ipcMain.handle.bind(ipcMain);
+    ipcMain.on = function (ch, fn) {
+      if (ch !== PATHS && ch !== ONE) return on(ch, fn);
+      // event.returnValue sends the reply the moment it is set, so the handler gets a stand-in event that fixes the value first.
+      return on(ch, (e, ...a) => fn(new Proxy(e, {
+        set(t, k, v) { t[k] = k === 'returnValue' ? fix(ch, v, a[0]) : v; return true; },
+        get(t, k) { const v = t[k]; return typeof v === 'function' ? v.bind(t) : v; },
+      }), ...a));
+    };
+    ipcMain.handle = function (ch, fn) {
+      if (ch === INSTALL) return handle(ch, (e, name, ...a) => { if (BLOCK.has(name)) { slimNote(name, 'install'); return Promise.reject(new Error(`${name} is switched off by Twilight`)); } return fn(e, name, ...a); });
+      if (ch === PATHS || ch === ONE) return handle(ch, async (e, ...a) => fix(ch, await fn(e, ...a), a[0]));
+      return handle(ch, fn);
+    };
+  } catch (e) { note('slim hook failed: ' + (e && e.message || e)); }
+  const slimDisk = () => {
+    const { app } = require('electron');
+    const appDir = path.dirname(process.execPath), root = path.dirname(appDir), cur = path.basename(appDir);
+    const ver = v => (String(v).match(/(\d+)\.(\d+)\.(\d+)/) || []).slice(1).map(Number);
+    const older = (a, b) => { const x = ver(a), y = ver(b); if (x.length < 3 || y.length < 3) return false; for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] < y[i]; return false; };
+    const size = p => { try { const st = fs.lstatSync(p); return st.isDirectory() ? fs.readdirSync(p).reduce((t, f) => t + size(path.join(p, f)), 0) : st.size; } catch { return 0; } };
+    let freed = 0, n = 0, failed = 0;
+    const del = p => { const b = size(p); try { fs.rmSync(p, { recursive: true, force: true }); freed += b; n++; } catch { failed++; } };
+    if (!/^app-\d/.test(cur)) return note(`slim disk ${CHANNEL}: not in an app-* folder, left alone`);
+    try { for (const d of fs.readdirSync(root)) if (/^app-\d/.test(d) && d !== cur && older(d, cur)) del(path.join(root, d)); } catch {}
+    try { const pk = path.join(root, 'packages'); for (const f of fs.readdirSync(pk)) if (/\.nupkg$/i.test(f) && older(f, cur)) del(path.join(pk, f)); } catch {}
+    const loc = String(app.getLocale() || 'en-US').toLowerCase(), keep = new Set(['en-us', 'en-gb', loc, loc.split('-')[0]]);
+    try { const dir = path.join(appDir, 'locales'); for (const f of fs.readdirSync(dir)) if (/\.pak$/i.test(f) && !keep.has(f.slice(0, -4).toLowerCase())) del(path.join(dir, f)); } catch {}
+    if (n || failed) note(`slim disk ${CHANNEL}: removed ${n}${failed ? `, ${failed} in use` : ''}, freed ${Math.round(freed / 1048576)} MB`);
+  };
+
   // Every plugin file in plugins/ loads unless its name is listed in config.json "disabled".
   const listPlugins = () => {
     try { return fs.readdirSync(path.join(__dirname, 'plugins')).filter(f => f.endsWith('.js')).map(f => f.slice(0, -3)); }
@@ -116,13 +179,25 @@ if (process.type === 'browser') {
 
 
   // The Theme tab asks for window changes through here (only these few keys, nothing else is writable).
-  ipcMain.handle('twilight:cmd', (e, c) => {
+  ipcMain.handle('twilight:cmd', async (e, c) => {
     if (c?.type === 'win' && ['minimize', 'maximize', 'close'].includes(c.op)) { // the Window buttons plugin (top right)
       try {
         const w = require('electron').BrowserWindow.fromWebContents(e.sender) || mainWin; if (!w || w.isDestroyed()) return { ok: false };
         if (c.op === 'minimize') w.minimize(); else if (c.op === 'close') w.close(); else if (w.isMaximized()) w.unmaximize(); else w.maximize();
         return { ok: true };
       } catch (err) { return { ok: false, error: String(err.message || err).slice(0, 100) }; }
+    }
+    // Compare page: start a stock run of THIS Discord (it measures itself, then comes back with Twilight), or read the results.
+    if (c?.type === 'compare') {
+      if (c.op === 'start') { try { fs.writeFileSync(path.join(__dirname, `stock-${CHANNEL}.flag`), 'one start of plain Discord, measured'); } catch (err) { return { ok: false, error: String(err.message || err).slice(0, 80) }; } setTimeout(() => restart('compare with stock'), 400); return { ok: true }; }
+      return { ...json(`reports/compare-${CHANNEL}.json`), channel: CHANNEL, waiting: compareWaiting };
+    }
+    if (c?.type === 'slim') {
+      if (['games', 'krisp', 'disk'].includes(c.key) && typeof c.on === 'boolean') {
+        const cfg = jsonStrict('config.json'); if (!cfg) return { ok: false, error: 'config.json unreadable, left alone' };
+        cfg.slim = { ...(cfg.slim && typeof cfg.slim === 'object' ? cfg.slim : {}), [c.key]: c.on }; writeAtomic('config.json', JSON.stringify(cfg, null, 2));
+      }
+      return { saved: slimCfg(), running: { ...SLIM }, blocked: [...BLOCK] };
     }
     if (c?.type === 'status') return { mode: 'off', hidePopouts: hideOn(), popouts: popouts.size };
     if (c?.type === 'popouts' && typeof c.on === 'boolean') {
@@ -222,7 +297,12 @@ if (process.type === 'browser') {
     `const __fs = require('fs'), __LOG = ${JSON.stringify(path.join(__dirname, 'reports', 'launch.txt'))};`,
     "const __note = s => { try { __fs.appendFileSync(__LOG, new Date().toISOString() + ' ' + s + '\\n'); } catch (e) {} };",
     "__note('core hook ran');",
-    `try { require(${JSON.stringify(path.join(__dirname, 'twilight.js'))}); __note('twilight.js loaded'); } catch (e) { __note('twilight.js FAILED: ' + (e && e.stack || e)); }`,
+    // A stock-<channel>.flag next to the mod gives ONE start of plain Discord (Twilight not loaded), for comparing against stock.
+    // The flag is renamed to .used on the way, so the next start is back to normal by itself.
+    `const __ch = (b => b.includes('ptb') ? 'ptb' : b.includes('canary') ? 'canary' : 'stable')(require('path').basename(process.execPath).toLowerCase()), __stock = require('path').join(${JSON.stringify(__dirname)}, 'stock-' + __ch + '.flag');`,
+    "let __plain = false; try { if (__fs.existsSync(__stock)) { __fs.renameSync(__stock, __stock + '.used'); __plain = true; __note('stock start ' + __ch + ' (Twilight not loaded)'); } } catch (e) {}",
+    `if (__plain) try { require(${JSON.stringify(path.join(__dirname, 'stock.js'))})(__ch); } catch (e) { __note('stock.js FAILED: ' + (e && e.message || e)); }`,
+    `if (!__plain) try { require(${JSON.stringify(path.join(__dirname, 'twilight.js'))}); __note('twilight.js loaded'); } catch (e) { __note('twilight.js FAILED: ' + (e && e.stack || e)); }`,
     "module.exports = require('./core.asar');", ''].join('\n');
   const verCmp = (a, b) => { const x = a.replace('app-', '').split('.').map(num), y = b.replace('app-', '').split('.').map(num); for (let i = 0; i < 4; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0); return 0; };
   const ensureHook = base => {
@@ -232,7 +312,7 @@ if (process.type === 'browser') {
       const dir = path.join(mods, core, 'discord_desktop_core'), f = path.join(dir, 'index.js');
       if (!fs.existsSync(path.join(dir, 'core.asar'))) return; // the module is not fully in place yet: the next attempt will do it
       const cur = fs.readFileSync(f, 'utf8');
-      if (cur.includes(HOOK_MARK)) return;
+      if (cur.includes(HOOK_MARK)) { if (cur !== hookText()) fs.writeFileSync(f, hookText()); return; } // ours: brought up to date when the template changes
       if (!/^\s*module\.exports\s*=\s*require\(\s*['"]\.\/core\.asar['"]\s*\)\s*;?\s*$/.test(cur)) { // not Discord's usual one-liner: leave it, say so once
         fs.mkdirSync(path.join(__dirname, 'reports'), { recursive: true });
         if (!fs.existsSync(path.join(__dirname, 'reports', 'hook-skipped.txt'))) fs.writeFileSync(path.join(__dirname, 'reports', 'hook-skipped.txt'), `${new Date().toISOString()} ${app}: index.js is not the usual one-liner, left alone. Run the launcher to repair.\n`);
@@ -265,6 +345,19 @@ if (process.type === 'browser') {
   app.whenReady().then(() => {
     try { keepHook(); } catch {}
     note(`started ${CHANNEL} ${path.basename(path.dirname(process.execPath))} v${json('manifest.json').version || '?'}`);
+    // After a stock run (Compare page), measure this Discord WITH Twilight the same way: same wait, same length.
+    try {
+      const cmp = json(`reports/compare-${CHANNEL}.json`);
+      if (cmp.stock && !cmp.twilight) {
+        compareWaiting = true; const M = require('./measure.js'), t0 = Date.now();
+        setTimeout(async () => {
+          const r = await M.run(path.basename(process.execPath).replace(/\.exe$/i, ''), M.SECS); compareWaiting = false;
+          try { M.save(__dirname, CHANNEL, 'twilight', { ...r, firstRenderMs: await M.firstRender(), at: new Date().toISOString(), afterS: Math.round((Date.now() - t0) / 1000) - (r.secs || M.SECS), version: json('manifest.json').version, slim: { ...SLIM } }); } catch {}
+          note(`twilight measured ${CHANNEL}: ${r.ramMB} MB, ${r.cpuPct}% CPU, ${r.procs} processes`);
+        }, M.WAIT * 1000).unref?.();
+      }
+    } catch {}
+    if (SLIM.disk) setTimeout(() => { try { slimDisk(); } catch (e) { note('slim disk failed: ' + (e && e.message || e)); } }, 60000).unref?.();
     pending = check().catch(e => ({ error: e.message }));
     const s = session.defaultSession;
     s.setPreloads([...s.getPreloads(), __filename]);

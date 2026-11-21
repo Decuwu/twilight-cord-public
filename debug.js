@@ -65,21 +65,6 @@ font:11px/1.45 Consolas,monospace;white-space:pre-wrap;word-break:break-word}
 .twd-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
 .twd-chip{padding:5px 11px;background:rgba(255,255,255,.06);cursor:pointer;font:700 10px "Segoe UI",sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#a9c4db}
 .twd-chip:hover{background:rgba(108,200,255,.3)}.twd-chip.on{background:#6cc8ff;color:#fff}
-.twd-diff{position:fixed;top:60px;left:50%;transform:translateX(-50%);width:min(560px,92vw);max-height:76vh;overflow:auto;z-index:2147483646;padding:14px 16px 12px;border-radius:12px;
-background:linear-gradient(145deg,rgb(14 26 44/.86),rgb(3 6 12/.82));backdrop-filter:blur(var(--tw-blur,22px)) saturate(1.6);border:1px solid rgba(108,200,255,.28);
-box-shadow:0 22px 60px rgba(0,0,0,.6);color:#d2e6f5;font:13px "Segoe UI",sans-serif}
-.twd-diff h3{margin:0 0 2px;font:italic 900 15px "Arial Black",Impact,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#dff4ff}
-.twd-diff .sub{margin-bottom:10px;color:#7f9bb5;font:600 11px "Segoe UI",sans-serif;letter-spacing:.06em}
-.twd-diff .r{display:grid;grid-template-columns:130px 1fr 1fr;gap:10px;padding:7px 0;border-top:1px solid rgba(255,255,255,.07);align-items:start}
-.twd-diff .r.h{border-top:0;font:700 10px "Segoe UI",sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#7f9bb5;padding-top:0}
-.twd-diff .n{font-weight:700;color:#b9ecff;display:flex;align-items:center;gap:7px}.twd-diff .n i{width:8px;height:8px;border-radius:50%;flex:none}
-.twd-diff .s{color:#8aa6bf}.twd-diff .t{color:#d2e6f5}.twd-diff .r.off{opacity:.45}
-.twd-diff .live{margin:4px 0 10px;padding:8px 10px;border-radius:8px;background:rgba(108,200,255,.07);border:1px solid rgba(108,200,255,.18)}
-.twd-diff .live .r{border-top:1px solid rgba(255,255,255,.05);grid-template-columns:120px 1fr 1fr}
-.twd-diff .live .r:first-of-type{border-top:0}
-.twd-diff .btn{display:inline-block;margin-top:6px;padding:5px 12px;border-radius:5px;cursor:pointer;background:rgba(108,200,255,.2);font:700 10px "Segoe UI",sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#dff4ff}
-.twd-diff .btn:hover{background:rgba(108,200,255,.35)}
-.twd-diff .ft{margin-top:10px;color:#7f9bb5;font:600 11px "Segoe UI",sans-serif}
 .twd-set{margin:2px 8px;padding:6px 10px;border-radius:4px;cursor:pointer;font:500 16px "gg sans","Segoe UI",sans-serif;color:#b9ecff;display:flex;align-items:center;gap:8px}
 .twd-set:hover{background:rgba(108,200,255,.16);color:#fff}
 .twd-set i{width:8px;height:8px;border-radius:50%;background:#6cc8ff;box-shadow:0 0 8px 2px rgba(108,200,255,.7)}
@@ -202,7 +187,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
         action(capturing ? 'Press the new key combination… (Esc cancels)' : 'Menu key: ' + keyName(T.debug.key), () => { capturing = true; render(); }, null, capturing ? '' : 'Click, then press the keys you want (F-keys work best: letters without Ctrl / Alt only work while you are not typing)'),
         ...(T.ls.get('menuKey') ? [action('Reset menu key', () => { T.ls.set('menuKey', null); T.debug.key = T.debug.cfgKey; render(); }, null, 'Back to ' + keyName(T.debug.cfgKey))] : []),
         sec('Discord'),
-        action('What is different from normal Discord', () => showDiff(), null, 'A small overlay: stock Discord vs Twilight Cord'),
+        action('What is different from normal Discord', () => { goto('Global', 'Compare'); render(); }, null, 'Stock Discord vs Twilight, measured, and every feature side by side'),
         action('Reload Discord', () => location.reload(), null, 'Restarts the page, reloads Twilight-Cord'),
         action('Run diagnostics', () => runDiag(), null, 'Copies a report you can paste anywhere'),
         action('Copy console log', () => copy(T.logs.map(l => `${new Date(l.t).toLocaleTimeString([], { hour12: false })} [${l.level}] ${l.text}`).join('\n'), 'Console log'), null, 'Everything in the Console tab'),
@@ -214,6 +199,20 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
         sec('Performance'),
         action(T.lite() ? 'Ultra lightweight mode: ON (click to turn off)' : 'Ultra lightweight mode: off (click to turn on)', () => { T.setLite(!T.lite()); T.notify('Lightweight mode', T.lite() ? 'On: heavy plugins paused, blur off' : 'Off', 2500, 'info'); }, null, 'Pauses heavy plugins, removes blur, stops the shader'),
         action('Hide pop-out windows from screen share', async () => { const st = await T.cmd({ type: 'status' }); const on = !(st?.hidePopouts !== false); await T.cmd({ type: 'popouts', on }); T.notify('Pop-outs', on ? 'Hidden from capture' : 'Visible in capture', 2500, 'info'); }, null, 'Toggle: pop-out windows are invisible in screen share and recordings'),
+        sec('Slim Discord (applies after a restart)'),
+        ...(() => {
+          const st = T.debug.slim;
+          if (!st) { T.cmd({ type: 'slim' }).then(r => { if (r) { T.debug.slim = r; T.debug.refresh(); } }); return [h('div', { className: 'twd-out', textContent: 'Loading…' })]; }
+          const flip = async k => { const r = await T.cmd({ type: 'slim', key: k, on: !st.saved[k] }); if (r?.saved) { T.debug.slim = r; T.notify('Slim Discord', 'Saved: restart Discord to apply', 2500, 'info'); } else T.notify('Slim Discord', r?.error || 'Could not save', 4000, 'error'); T.debug.refresh(); };
+          const row = (k, label, desc) => ledRow(label + (!!st.saved[k] !== !!st.running[k] ? ' (after restart)' : ''), !!st.saved[k], () => flip(k), desc);
+          return [
+            row('games', 'No in-game overlay or game extras', 'Overlay, cloud game saves and the old game store stay unloaded'),
+            row('krisp', 'No Krisp noise suppression', 'Saves the biggest module; standard noise suppression still works'),
+            row('disk', 'Clean disk junk', 'Old Discord builds, old installers and unused language packs, a minute after start-up'),
+            ledRow('Trim memory in the background', !!T.ls.get('slimTrim', false), () => { T.ls.set('slimTrim', !T.ls.get('slimTrim', false)); T.debug.refresh(); render(); },
+              'A minute after Discord is minimised or covered, it gives back the memory it can (about 20 MB). Works straight away' + (T.cost.trims ? ` · trimmed ${T.cost.trims}× so far` : '')),
+          ];
+        })(),
         sec('Safe mode and cost'),
         ...(T.debug.safe ? [action('Leave safe mode', () => T.cmd({ type: 'safe', on: false }), null, 'Restarts Discord with all plugins back on')]
           : [action('Restart in safe mode', () => T.cmd({ type: 'safe', on: true }), null, 'Restarts Discord with no plugins or themes, in case something breaks')]),
@@ -293,6 +292,51 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
       }
       return nodes;
     },
+    Compare() {
+      const nodes = [], cmp = cmpState, mb = v => v == null ? '?' : v + ' MB', pct = v => v == null ? '?' : v + '%';
+      if (!cmp.data && !cmp.busy) { cmp.busy = true; T.cmd({ type: 'compare' }, 4000).then(r => { cmp.data = r || {}; cmp.busy = false; render(); }); }
+      const d = cmp.data || {}, st = d.stock, tw = d.twilight, ch = { ptb: 'PTB', stable: 'Stable', canary: 'Canary' }[d.channel] || 'this Discord';
+      const when = x => x?.at ? new Date(x.at).toLocaleString([], { hour12: false, day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+      nodes.push(sec(`Stock Discord vs Twilight (${ch}, measured by Windows)`));
+      if (!cmp.data) nodes.push(h('div', { className: 'twd-out', textContent: 'Loading…' }));
+      else if (!st) nodes.push(h('div', { className: 'twd-out', textContent: 'Not tested yet. The test below starts this Discord once as plain stock Discord, measures it, then measures it again with Twilight the same way.' }));
+      else {
+        const diff = (a, b, unit, dp = 0) => a == null || b == null ? '' : ` (${b - a >= 0 ? '+' : ''}${(b - a).toFixed(dp)}${unit})`;
+        // One row per measure: name and "stock → Twilight" underneath, the difference on the right (green when Twilight is lighter).
+        const cmpRow = (label, a, b, fmtv, unit, dp = 0, noise = 0) => {
+          const has = a != null && b != null, dv = has ? b - a : 0, small = Math.abs(dv) <= noise; // within normal run-to-run change: grey, not red or green
+          return h('div', { className: 'twd-row info' }, h('span', {}, label, h('small', { textContent: tw ? `Stock ${fmtv(a)} → Twilight ${fmtv(b)}` : `Stock ${fmtv(a)} · Twilight: ${d.waiting ? 'measuring… (about 2 minutes after start-up)' : 'restart Discord to measure'}` })),
+            h('span', { style: 'color:' + (!has || small ? '#a9c4db' : dv < 0 ? '#3ddc84' : '#ff8a94'), textContent: has ? `${dv >= 0 ? '+' : '−'}${Math.abs(dv).toFixed(dp)}${unit}${small && dv ? ' (noise)' : ''}` : '' }));
+        };
+        nodes.push(
+          cmpRow('Memory (all Discord processes)', st.ramMB, tw?.ramMB, mb, ' MB', 0, 25),
+          cmpRow('Private memory', st.privateMB, tw?.privateMB, mb, ' MB', 0, 60),
+          cmpRow('CPU while idle', st.cpuPct, tw?.cpuPct, pct, '%', 2, 0.1),
+          ...(st.firstRenderMs ? [cmpRow('Start-up (until the app is drawn)', st.firstRenderMs, tw?.firstRenderMs, v => v == null ? '?' : (v / 1000).toFixed(1) + ' s', ' ms', 0, 1500)] : []),
+          cmpRow('Processes', st.procs, tw?.procs, v => String(v ?? '?'), ''),
+          h('div', { className: 'twd-out', textContent: `Stock run ${when(st)}${tw ? ', Twilight run ' + when(tw) + (tw.version ? ' (v' + tw.version + ')' : '') : ''}. Both measured ${st.afterS || 90}s after start-up for ${st.secs || 30}s, on whatever page Discord opened. Between two stock runs memory moves by about 20 MB (private memory by about 60 MB) and start-up by a second or more, so gaps that small are marked as noise.` }));
+      }
+      nodes.push(action('Test against stock Discord', () => {
+        T.notify('Compare with stock', 'Discord restarts as plain Discord for about 2 minutes, then comes back with Twilight', 6000, 'info');
+        setTimeout(() => T.cmd({ type: 'compare', op: 'start' }), 1500);
+      }, null, 'Restarts Discord without Twilight for about 2 minutes, then back. Twilight measures itself 2 minutes after that'));
+      nodes.push(sec('Live: both Discords right now'));
+      const L = cmp.live, fmt = a => a ? `${a.ramMB} MB · ${a.procs} processes · ${a.cpuPct}% CPU · GPU ${a.gpuPct}% / ${a.gpuMB} MB` : 'not running';
+      if (L?.apps) { const self = L.self === 'DiscordPTB' ? 'PTB' : 'Stable'; nodes.push(info(`Discord PTB${self === 'PTB' ? ' (this one)' : ''}`, fmt(L.apps.DiscordPTB)), info(`Discord Stable${self === 'Stable' ? ' (this one)' : ''}`, fmt(L.apps.Discord))); }
+      else if (L) nodes.push(h('div', { className: 'twd-out', textContent: L.error || 'No data' }));
+      nodes.push(action(cmp.measuring ? 'Measuring…' : L ? 'Measure again' : 'Measure now', async () => { if (cmp.measuring) return; cmp.measuring = true; render(); cmp.live = await T.cmd({ type: 'metrics' }, 30000) || { error: 'No answer' }; cmp.measuring = false; render(); }, null, 'Both columns show whatever is loaded in them: if the other Discord runs Twilight too, it is included'));
+      const c = T.cost, secs = Math.max(1, (Date.now() - c.at) / 1000), own = (ms, n) => `${ms.toFixed(1)} ms · ${n} calls · ${(ms / secs).toFixed(2)} ms/s`;
+      nodes.push(sec("Twilight's own work in this Discord"),
+        info('Start-up', `${c.start.toFixed(0)} ms once per load`), info('Discord events', own(c.flux.ms, c.flux.n)), info('Network checks', own(c.net.ms, c.net.n)), info('Code loaded', `${T.debug.kb || '?'} KB`));
+      nodes.push(sec('Built in (normal Discord has none of these)'),
+        info('Updates', 'Pulls its own updates from GitHub on start'), info('Settings', 'Auto-saved to a file next to the mod'),
+        info('Notifications', 'Toasts, top right'), info('Menu and console', T.debug.key.toUpperCase() + ' menu with console, CSS and tools'));
+      for (const [g, list] of byGroup([...T.plugins.values()].filter(p => p.vs))) {
+        nodes.push(sec(g));
+        for (const p of list) nodes.push(ledRow(p.name, !T.isOff(p.name), () => flipPlugin(p), `${p.desc} · Normal Discord: ${p.vs}`));
+      }
+      return nodes;
+    },
     Info() {
       const i = T.info(), out = h('div', { className: 'twd-out' }), q = input('Find by props, e.g. startTyping,stopTyping');
       return [
@@ -317,8 +361,9 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     NoTrack: 'Privacy', SilentTyping: 'Privacy',
     MessageLogger: 'Channel', Translate: 'Channel', ClearURLs: 'Channel', StaffTags: 'Channel', RoleDividers: 'Channel', PlatformIndicators: 'Channel', MessageMenu: 'Channel', Petpet: 'Channel',
     FriendNotifier: 'Friends', QuickServerMute: 'Discord', ClearNotifications: 'Discord', EmojiStealer: 'Discord', Assistant: 'Discord', Generated: 'Discord' };
-  const SUBS = { Local: ['Self', 'Look', 'Privacy', 'Channel', 'Friends', 'Discord'], Global: ['General', 'Plugins', 'Notify', 'CSS', 'Console', 'Cost', 'Info'] };
+  const SUBS = { Local: ['Self', 'Look', 'Privacy', 'Channel', 'Friends', 'Discord'], Global: ['General', 'Plugins', 'Notify', 'CSS', 'Console', 'Cost', 'Compare', 'Info'] };
   const NAME = { General: 'Tools' }; // Global > General is the old Tools page
+  const cmpState = {}; // Compare page: results file, live numbers
   const nav = Object.assign({ tab: 'Local', Local: 'Self', Global: 'General' }, T.ls.get('menuNav', {}));
   const goto = (t, s) => { nav.tab = t; if (s) nav[t] = s; T.ls.set('menuNav', nav); };
   const placeOf = p => p.place || PLACE[p.name];
@@ -614,47 +659,8 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
   };
 
   // Overlay comparing stock Discord with this fork (built from the loaded plugins, so it is always current).
-  let diffEl;
-  const showDiff = () => {
-    if (diffEl) { T.win.remove(diffEl); diffEl.remove(); diffEl = null; return; }
-    const row = (name, stock, ours, on = true) => h('div', { className: 'r' + (on ? '' : ' off') },
-      h('div', { className: 'n' }, h('i', { style: `background:${on ? '#3ddc84' : '#ff4d5e'}` }), name), h('div', { className: 's', textContent: stock }), h('div', { className: 't', textContent: ours }));
-    const core = [
-      ['Updates', 'Discord only', 'Pulls its own updates from GitHub on start'],
-      ['Settings', 'None for the mod', 'Auto-saved to a file next to the mod'],
-      ['Notifications', 'Plain pop-ups', 'GTA-style toast, top right'],
-      ['Menu + console', 'None (DevTools only)', 'Ctrl+T menu with console, CSS, tools'],
-    ];
-    const plugins = [...T.plugins.values()].filter(p => p.vs);
-    // Real usage: Discord Stable vs Discord PTB, measured by Windows (a short PowerShell run in the main process).
-    // The channel running the mod is marked "+ Twilight"; the other column is the same app without it (if it is open).
-    const live = h('div', { className: 'live' }), c = T.cost, secs = () => Math.max(1, (Date.now() - c.at) / 1000);
-    const fmt = a => a ? [`${a.ramMB} MB · ${a.procs} processes`, `${a.cpuPct}% of the CPU`, `${a.gpuPct}% · ${a.gpuMB} MB`] : ['not running', 'not running', 'not running'];
-    const drawLive = m => {
-      const ptbSelf = !!m && m.self === 'DiscordPTB', mine = m && m.apps && m.apps[ptbSelf ? 'DiscordPTB' : 'Discord'], other = m && m.apps && m.apps[ptbSelf ? 'Discord' : 'DiscordPTB'];
-      const own = (ms, n) => `${ms.toFixed(1)} ms total · ${n} calls · ${(ms / secs()).toFixed(2)} ms/s`;
-      live.replaceChildren(
-        h('div', { className: 'r h' }, h('div', { textContent: 'Live usage' }), h('div', { textContent: ptbSelf ? 'Discord (Stable), no mod' : 'Discord PTB, no mod' }), h('div', { textContent: ptbSelf ? 'This Discord (PTB + Twilight)' : 'This Discord (Stable + Twilight)' })),
-        ...(m && m.apps ? ['RAM', 'CPU', 'GPU % · memory'].map((l, i) => row(l, fmt(other)[i], fmt(mine)[i])) : [h('div', { className: 'r' }, h('div', { className: 'n', textContent: 'Measuring...' }), h('div', { className: 's', textContent: m ? (m.error || 'no data') : 'takes about 3 seconds' }), h('div'))]),
-        row('Twilight start-up', 'n/a', `${c.start.toFixed(0)} ms once per load`), row('Twilight events', 'n/a', own(c.flux.ms, c.flux.n)), row('Twilight network checks', 'n/a', own(c.net.ms, c.net.n)),
-        row('Twilight code', 'n/a', `${T.debug.kb || '?'} KB loaded`),
-        h('div', { className: 'btn', textContent: 'Measure again', onclick: () => measure() }));
-    };
-    const measure = async () => { drawLive(null); drawLive(await T.cmd({ type: 'metrics' }, 30000)); };
-    drawLive(null); measure();
-    diffEl = h('div', { className: 'twd-diff' },
-      h('h3', { textContent: 'Normal Discord vs Twilight-Cord' }),
-      h('div', { className: 'sub', textContent: `v${T.debug.version} · ${plugins.length} plugins · about ${T.debug.kb || '?'} KB of extra code · no tracking, only a GitHub update check` }),
-      live,
-      h('div', { className: 'r h' }, h('div', { textContent: 'Feature' }), h('div', { textContent: 'Normal Discord' }), h('div', { textContent: 'Twilight-Cord' })),
-      ...core.map(c => row(c[0], c[1], c[2])),
-      ...plugins.map(p => row(p.name, p.vs, p.desc, !T.isOff(p.name))),
-      h('div', { className: 'ft', textContent: 'Stable and PTB are different builds (and if both run the mod, both columns include it), so part of any gap is not the mod: the "Twilight" rows show the mod\'s own cost. Green = on, red = off. Click outside or press Esc to close.' }));
-    const close = e => { if (e.type === 'keydown' && e.key !== 'Escape') return; if (e.type === 'mousedown' && diffEl?.contains(e.target)) return; if (diffEl) T.win.remove(diffEl); diffEl?.remove(); diffEl = null; window.removeEventListener('keydown', close, true); document.removeEventListener('mousedown', close, true); };
-    window.addEventListener('keydown', close, true);
-    setTimeout(() => document.addEventListener('mousedown', close, true));
-    document.documentElement.append(diffEl); T.win.add(diffEl);
-  };
+  // "What is different from normal Discord": the Compare page of the menu (Global > Compare).
+  const showDiff = () => { goto('Global', 'Compare'); toggle(true); if (popup.isOpen()) { popup.show('Menu'); render(); } };
 
   // Generated profile picture for Twilight (shown in the friends list, DM list and quick chat).
   T.pfp = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1e5aa8"/><stop offset="1" stop-color="#0a1428"/></linearGradient></defs><rect width="64" height="64" fill="url(#g)"/><path d="M42 12a21 21 0 1 0 10 33A17 17 0 0 1 42 12z" fill="#dff4ff"/><circle cx="46" cy="40" r="2" fill="#b9ecff"/><circle cx="50" cy="26" r="1.4" fill="#b9ecff"/></svg>');

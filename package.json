@@ -13,6 +13,8 @@
       "core.js",
       "debug.js",
       "twilight.js",
+      "measure.js",
+      "stock.js",
       "manifest.json",
       "config.json",
       "plugins/*",
