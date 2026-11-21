@@ -1,10 +1,9 @@
 {
-  "version": "1.15.6",
+  "version": "1.15.10",
   "files": [
     "core.js",
     "debug.js",
-    "twilight.js",
-    "themes/midnight.css",
+    "plugins/buildBadge.js",
     "plugins/clearNotifs.js",
     "plugins/clearUrls.js",
     "plugins/clonerTest.js",
@@ -29,6 +28,7 @@
     "plugins/translate.js",
     "plugins/typingSpeed.js",
     "plugins/viewIcons.js",
-    "plugins/windowButtons.js"
+    "themes/midnight.css",
+    "twilight.js"
   ]
 }

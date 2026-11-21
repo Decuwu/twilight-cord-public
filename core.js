@@ -534,6 +534,7 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
         // 1.12.0: lightweight mode used to switch itself on and stay on. Start everyone from "off" once; it is only ever turned on by hand now.
         if (!ls.get('liteReset', false)) { ls.set('liteReset', true); ls.set('lite', false); ls.set('liteAuto', null); }
         document.documentElement.toggleAttribute('data-tw-lite', !!ls.get('lite', false));
+        window.Twilight.version = opts.version; // set before plugins start so they can show it
         plugins.forEach(p => { if (!isOff(p.name) && !(ls.get('lite', false) && p.heavy)) { const t1 = performance.now(); try { cur = p.name; p.start?.(); } catch (e) { console.error('[twilight]', p.name, e); } finally { cur = null; slot(p.name).start = performance.now() - t1; } } });
         cost.start = performance.now() - t0;
         try { window.Twilight.debug?.init(opts); } catch (e) { console.error('[twilight] debug', e); }

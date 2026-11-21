@@ -309,7 +309,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
 
   // ---- Menu layout: three tabs ----
   // Local = things that act on what you are looking at, in submenus (Self, Look, Privacy, Channel, Friends, Discord). Global = Twilight itself (settings, plugins, tools, developer pages). A plugin with a `page` name gets its own top tab.
-  const PLACE = { Tags: 'Self', 'Tag commands': 'Self', Snippets: 'Self', TypingSpeed: 'Self', 'Window buttons': 'Self',
+  const PLACE = { Tags: 'Self', 'Tag commands': 'Self', Snippets: 'Self', TypingSpeed: 'Self', 'Build badge': 'Self',
     ThemeMaker: 'Look', ImageZoom: 'Look', ViewIcons: 'Look',
     NoTrack: 'Privacy', SilentTyping: 'Privacy',
     MessageLogger: 'Channel', Translate: 'Channel', ClearURLs: 'Channel', StaffTags: 'Channel', RoleDividers: 'Channel', PlatformIndicators: 'Channel', MessageMenu: 'Channel', Petpet: 'Channel',

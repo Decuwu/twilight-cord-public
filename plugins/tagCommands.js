@@ -28,8 +28,8 @@ Twilight.definePlugin({
       const raw = c.opts.map(opt);
       const root = { id: c.id, type: 1, application_id: APP, version: ver, name: c.name, description: c.desc, options: raw, dm_permission: true, contexts: [0, 1, 2], integration_types: [0, 1], description_localized: c.desc, name_localized: c.name };
       const shown = raw.map(o => ({ ...o, serverLocalizedName: o.name, displayName: o.name, displayDescription: o.description, maxLength: o.max_length, ...(o.choices ? { choices: o.choices.map(x => ({ ...x, displayName: x.name })) } : {}) }));
-      // inputType 1 = BUILT_IN_TEXT: Discord runs execute() itself and sends what it returns ({ content }); null sends nothing.
-      commands[c.id] = { version: ver, id: c.id, untranslatedName: c.name, serverLocalizedName: c.name, applicationId: APP, type: 1, inputType: 1, untranslatedDescription: c.desc, options: shown, rootCommand: root, dmPermission: true, displayName: c.name, displayDescription: c.desc, contexts: [0, 1, 2], integration_types: [0, 1],
+      // inputType 1 = BUILT_IN_TEXT (only /tag): Discord runs execute() and sends what it returns ({ content }). Every other command is inputType 0 = BUILT_IN: it runs locally and sends NOTHING (with type 1, a null result made Discord post the typed command text, e.g. "/petpet user:@name", as a message).
+      commands[c.id] = { version: ver, id: c.id, untranslatedName: c.name, serverLocalizedName: c.name, applicationId: APP, type: 1, inputType: c.sub === 'use' ? 1 : 0, untranslatedDescription: c.desc, options: shown, rootCommand: root, dmPermission: true, displayName: c.name, displayDescription: c.desc, contexts: [0, 1, 2], integration_types: [0, 1],
         execute: (opts, ctx) => me.exec(c, opts, ctx) };
     }
     const bot = { id: APP, username: 'Twilight', discriminator: '0', avatar: null, bot: true, system: false, flags: 0, publicFlags: 0, globalName: null };

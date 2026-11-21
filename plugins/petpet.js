@@ -104,9 +104,18 @@ Twilight.definePlugin({
     if (!box) { Twilight.notify('Petpet', 'Open a chat first. Saved instead', 4000, 'warn'); return this.save(blob, u); }
     const dt = new DataTransfer(); dt.items.add(file); box.focus();
     box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
+    this.armed = Date.now(); [0, 150, 500].forEach(ms => setTimeout(() => this.clearLeft(), ms)); // the typed "/petpet" must not go out with the GIF
     Twilight.notify('Petpet', `${this.nameOf(u)}’s pet-pet GIF is ready. Press Enter to send`, 4500, 'success');
   },
+  boxEl() { return document.querySelector('[role="textbox"][contenteditable="true"]'); },
+  // true when the box holds only the leftover command text ("/petpet" or "/petpet name")
+  isLeft(box) { return !!box && /^[\s\u200b\ufeff]*\/petpet\b[^\n]*$/i.test(box.textContent || ''); },
+  clearLeft() {
+    const box = this.boxEl(); if (!this.isLeft(box)) return;
+    try { box.focus(); document.execCommand('selectAll'); document.execCommand('delete'); } catch {}
+  },
   async run(text) {
+    if (Date.now() - (this.ranAt || 0) < 1500) return; this.ranAt = Date.now();
     const u = this.resolve(text);
     if (!u) return Twilight.notify('Petpet', 'Who? Use /petpet name, or open a DM first', 4500, 'warn');
     Twilight.notify('Petpet', `Making ${this.nameOf(u)}’s GIF...`, 1800, 'info');
@@ -123,6 +132,14 @@ Twilight.definePlugin({
       e.preventDefault(); e.stopPropagation(); this.run(m[1]);
     };
     window.addEventListener('click', this.click, true);
+    // Safety: if the typed "/petpet" is still in the box next to the GIF, Enter clears it instead of sending it as text.
+    this.key = e => {
+      if (e.key !== 'Enter' || e.shiftKey || Date.now() - (this.armed || 0) > 300000) return;
+      const box = e.target?.closest?.('[role="textbox"][contenteditable="true"]'); if (!this.isLeft(box)) return;
+      e.preventDefault(); e.stopImmediatePropagation(); this.clearLeft();
+      Twilight.notify('Petpet', 'Removed the /petpet text. Press Enter again to send just the GIF', 3500, 'info');
+    };
+    window.addEventListener('keydown', this.key, true);
   },
-  stop() { Twilight.slash.remove('petpet'); window.removeEventListener('click', this.click, true); },
+  stop() { Twilight.slash.remove('petpet'); window.removeEventListener('click', this.click, true); window.removeEventListener('keydown', this.key, true); },
 });

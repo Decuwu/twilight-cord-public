@@ -56,24 +56,18 @@ if (process.type === 'browser') {
   // (Window glass, the see-through window and the custom snapper were removed in 1.12.0: the main window is Discord's normal window.)
   const popouts = new Set(); let mainWin = null;
   const hideOn = () => json('config.json').hidePopouts !== false;
+  // Windows are picked up through Electron's own 'browser-window-created' event. (Up to 1.15.9 this swapped in a BrowserWindow
+  // subclass, which hid every window from BrowserWindow.fromId / getAllWindows, so Discord's minimise / maximise / close did nothing.)
   try {
-    const electron = require('electron'), key = require.resolve('electron'), Orig = electron.BrowserWindow;
-    class TwilightWindow extends Orig {
-      constructor(o = {}) {
-        const big = !o.parent && (o.minWidth || o.width || 0) >= 700; // not the small splash / update windows
-        const main = big && !mainWin;
-        super(o);
-        if (main) {
-          mainWin = this; this.once('closed', () => { mainWin = null; });
-        } else if (mainWin && !this.isDestroyed()) {
-          popouts.add(this); this.once('closed', () => popouts.delete(this));
-          try { if (hideOn()) this.setContentProtection(true); } catch {}
-        }
-      }
-    }
-    delete require.cache[key].exports;
-    require.cache[key].exports = { ...electron, BrowserWindow: TwilightWindow };
-  } catch (e) { console.error('[twilight] window wrapper failed', e); }
+    // Discord stores its main window's id in global.mainWindowId right after creating it, so sort windows one tick later.
+    require('electron').app.on('browser-window-created', (_, w) => setImmediate(() => {
+      if (w.isDestroyed()) return;
+      if (w.id === global.mainWindowId) { mainWin = w; w.once('closed', () => { if (mainWin === w) mainWin = null; }); return; }
+      if (!mainWin) return; // splash / updater windows
+      popouts.add(w); w.once('closed', () => popouts.delete(w));
+      try { if (hideOn()) w.setContentProtection(true); } catch {}
+    }));
+  } catch (e) { console.error('[twilight] window watch failed', e); }
   // Real usage numbers for Discord Stable and Discord PTB, whichever runs the mod (Windows). One short PowerShell run, only when you ask (overlay > Measure).
   const PS_SCRIPT = [
     "$ErrorActionPreference='SilentlyContinue'",
