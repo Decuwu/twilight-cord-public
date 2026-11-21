@@ -188,6 +188,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
         ...(T.ls.get('menuKey') ? [action('Reset menu key', () => { T.ls.set('menuKey', null); T.debug.key = T.debug.cfgKey; render(); }, null, 'Back to ' + keyName(T.debug.cfgKey))] : []),
         sec('Discord'),
         action('What is different from normal Discord', () => { goto('Global', 'Compare'); render(); }, null, 'Stock Discord vs Twilight, measured, and every feature side by side'),
+        action("What's new", () => showWhatsNew(null, false), null, 'The changes in the last few Twilight updates'),
         action('Reload Discord', () => location.reload(), null, 'Restarts the page, reloads Twilight-Cord'),
         action('Run diagnostics', () => runDiag(), null, 'Copies a report you can paste anywhere'),
         action('Copy console log', () => copy(T.logs.map(l => `${new Date(l.t).toLocaleTimeString([], { hour12: false })} [${l.level}] ${l.text}`).join('\n'), 'Console log'), null, 'Everything in the Console tab'),
@@ -225,6 +226,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
           return [
             ledRow('Twilight start-up screen', sp.on, () => save({ on: !sp.on }), 'Midnight colours, stars and a Twilight label instead of Discord\'s grey window'),
             ...(sp.on ? [
+              ledRow('Show what is loading', sp.log !== false, () => save({ log: sp.log === false }), 'A small console line under the status text: modules, the window, plugins'),
               action('Logo: ' + LOGO[sp.logo === 'custom' && !sp.hasImage ? 'moon' : sp.logo], () => save({ logo: order[(order.indexOf(sp.logo) + 1) % order.length] }), null, 'Click to change'),
               action(sp.hasImage ? 'Choose a different picture…' : 'Use your own picture…', () => pick.click(), null, 'PNG, JPG, GIF or WebP, up to 8 MB. GIFs move'), pick,
               text, action('Save status text', () => save({ text: text.value }), null, sp.text ? 'Now: ' + sp.text : 'Now: Discord\'s own text'),
@@ -384,7 +386,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
   const NAME = { General: 'Tools' }; // Global > General is the old Tools page
   const cmpState = {}; // Compare page: results file, live numbers
   const nav = Object.assign({ tab: 'Local', Local: 'Self', Global: 'General' }, T.ls.get('menuNav', {}));
-  const goto = (t, s) => { nav.tab = t; if (s) nav[t] = s; T.ls.set('menuNav', nav); };
+  const goto = (t, s) => { if (wn.show) { if (wn.show.fromUpdate) T.ls.set('clSeen', T.debug.version); wn.show = null; } nav.tab = t; if (s) nav[t] = s; T.ls.set('menuNav', nav); };
   const placeOf = p => p.place || PLACE[p.name];
   const flipPlugin = p => {
     const turnOn = T.isOff(p.name);
@@ -435,15 +437,58 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     return [...(jumps.length ? [h('div', { className: 'twd-chips' }, ...jumps)] : []), ...(out.length || jumps.length ? out : [h('div', { className: 'twd-out', textContent: 'No match for “' + query.trim() + '”.' })])];
   };
 
+  // ---- What's new: after Twilight updates itself, the next time the menu opens it shows the changelog since the version you last saw.
+  // A fresh install starts quietly (nothing to catch up on). Also reachable any time: General > Discord > What's new.
+  const vnum = v => String(v || '0').split('.').map(n => parseInt(n, 10) || 0), vnewer = (a, b) => { const x = vnum(a), y = vnum(b); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false; };
+  const wn = { checked: false, show: null }; // show: { entries, fromUpdate, from }
+  const inline = text => { // **bold** and `code` only; everything else stays plain text (no HTML from the file)
+    const out = []; let rest = String(text);
+    for (let m; (m = /(\*\*([^*]+)\*\*|`([^`]+)`)/.exec(rest));) { if (m.index) out.push(rest.slice(0, m.index)); out.push(m[2] != null ? h('b', { textContent: m[2] }) : h('code', { textContent: m[3] })); rest = rest.slice(m.index + m[0].length); }
+    if (rest) out.push(rest); return out;
+  };
+  const clCard = e => {
+    const card = h('div', { className: 'twd-cl' }, h('h4', {}, 'v' + e.version, ...(e.version === String(T.debug.version).replace(/\.d\d*$/i, '') ? [h('span', { textContent: /\.d\d*$/i.test(T.debug.version) ? 'installed · dev build' : 'installed' })] : [])));
+    let ul = null;
+    for (const raw of e.body.split(/\r?\n/)) {
+      const line = raw.trim(); if (!line) { ul = null; continue; }
+      const head = /^\*\*([^*]+)\*\*(.*)$/.exec(line), bullet = /^[-*] +(.*)$/.exec(line);
+      if (bullet) { if (!ul) card.append(ul = h('ul')); ul.append(h('li', {}, ...inline(bullet[1]))); }
+      else if (head && !head[2].trim().replace(/^[(:].*$/, '')) { ul = null; card.append(h('h5', {}, head[1], ...(head[2].trim() ? [h('span', { style: 'text-transform:none;letter-spacing:0;font-weight:500;color:var(--tw-muted)', textContent: ' ' + head[2].trim() })] : []))); }
+      else { ul = null; card.append(h('p', {}, ...inline(line))); }
+    }
+    return card;
+  };
+  const showWhatsNew = async (from, fromUpdate) => {
+    const r = await T.cmd(from ? { type: 'changelog', from, to: T.debug.version } : { type: 'changelog', count: 3 }, 4000);
+    if (!r?.entries?.length) { if (!fromUpdate) T.notify("What's new", 'No changelog found next to the mod', 3000, 'warn'); return; }
+    wn.show = { entries: r.entries, fromUpdate, from }; if (body) body.scrollTop = 0; render();
+  };
+  const seenWhatsNew = () => { T.ls.set('clSeen', T.debug.version); wn.show = null; render(); };
+  const checkWhatsNew = () => {
+    if (wn.checked || !T.debug.version || T.debug.version === '?') return; wn.checked = true;
+    const seen = T.ls.get('clSeen', null);
+    if (!seen) return T.ls.set('clSeen', T.debug.version); // first run: nothing to catch up on
+    if (vnewer(T.debug.version, seen)) showWhatsNew(seen, true);
+  };
+  const whatsNewNodes = () => {
+    const s = wn.show, n = s.entries.length;
+    return [
+      ...(s.fromUpdate ? [h('div', { className: 'twd-new' }, `Twilight updated to v${T.debug.version}`, h('small', { textContent: `Here is what changed since v${s.from}${n > 1 ? ` (${n} updates)` : ''}.` }))] : [sec("What's new")]),
+      ...s.entries.map(clCard),
+      action(s.fromUpdate ? 'Got it' : 'Back to the menu', seenWhatsNew, null, 'The full changelog is on GitHub (click the version at the top of Discord)'),
+    ];
+  };
   const render = () => {
     T.onLog = null; if (!body || !content) return;
     const top = topTabs(); if (!top.includes(nav.tab)) nav.tab = 'Local';
     const keep = body.scrollTop, tab = nav.tab, subs = SUBS[tab], q = query.trim().toLowerCase();
     searchIn.style.display = searchMode ? '' : 'none';
     side.replaceChildren(...top.map(t => h('div', { className: 'twd-tab' + (t === tab && !searchMode ? ' on' : ''), textContent: t, onclick: () => { setSearch(false); goto(t); body.scrollTop = 0; render(); } })));
+    checkWhatsNew();
     try {
       let nodes;
-      if (searchMode) nodes = q ? searchNodes(q) : [h('div', { className: 'twd-out', textContent: 'Type to search plugins, options and settings.' })];
+      if (wn.show) nodes = whatsNewNodes();
+      else if (searchMode) nodes = q ? searchNodes(q) : [h('div', { className: 'twd-out', textContent: 'Type to search plugins, options and settings.' })];
       else if (subs) {
         const cur = subs.includes(nav[tab]) ? nav[tab] : subs[0];
         const chips = h('div', { className: 'twd-chips' }, ...subs.map(k => h('div', { className: 'twd-chip' + (k === cur ? ' on' : ''), textContent: k, onclick: () => { goto(tab, k); body.scrollTop = 0; render(); } })));
@@ -568,6 +613,12 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
 .twd input,.twd select,.twd textarea{background:var(--tw-input);color:var(--tw-text);border:0;border-radius:4px;padding:8px 10px;font:14px "gg sans","Segoe UI",sans-serif}
 .twd textarea{font:13px Consolas,monospace}
 .twd-out{color:var(--tw-muted)}
+.twd-cl{background:var(--tw-side);border-radius:6px;padding:10px 14px 8px;margin-bottom:8px;font:400 13.5px/1.45 "gg sans","Segoe UI",sans-serif;color:var(--tw-text);user-select:text}
+.twd-cl h4{margin:0 0 6px;font:700 16px "gg sans","Segoe UI",sans-serif;color:var(--tw-head)}.twd-cl h4 span{margin-left:8px;font:600 11px "gg sans","Segoe UI",sans-serif;color:var(--tw-muted)}
+.twd-cl h5{margin:10px 0 4px;font:700 12px "gg sans","Segoe UI",sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--tw-brand)}
+.twd-cl ul{margin:0;padding-left:18px}.twd-cl li{margin:3px 0}.twd-cl p{margin:4px 0}.twd-cl b{color:var(--tw-head)}
+.twd-cl code{font:12px Consolas,monospace;background:var(--tw-input);padding:1px 4px;border-radius:3px}
+.twd-new{background:var(--tw-brand);color:#fff;border-radius:6px;padding:10px 14px;margin:4px 0 10px;font:600 14px "gg sans","Segoe UI",sans-serif}.twd-new small{display:block;font:400 12px "gg sans","Segoe UI",sans-serif;opacity:.85}
 .twd-log{background:var(--tw-side);border-radius:4px}.twd-log b{color:var(--tw-muted)}
 .twd-chip{background:var(--tw-side);border-radius:4px;color:var(--tw-text)}.twd-chip:hover{background:color-mix(in srgb,var(--tw-text) 10%,var(--tw-side))}.twd-chip.on{background:var(--tw-brand);color:#fff}
 .twd-ft{background:var(--tw-side);border-top:1px solid var(--tw-line);color:var(--tw-muted)}.twd-ft b{color:var(--tw-muted)}

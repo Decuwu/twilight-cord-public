@@ -32,6 +32,13 @@ if (process.type === 'browser') {
   // Discord put them, so its updater has nothing to put back: they are only hidden from Discord when it goes to load them
   // (a module it can't find counts as not installed). discord_hook stays, because Go Live game capture uses it.
   // disk: a minute after start-up, older app-* builds, older installer packages and unused language packs are deleted.
+  // Start-up log (1.18.1): short lines about what is loading, shown under the status text of the start-up screen.
+  const bootSteps = [], bootSinks = new Set();
+  const boot = step => {
+    step = String(step).slice(0, 64); bootSteps.push(step); if (bootSteps.length > 30) bootSteps.shift();
+    for (const wc of bootSinks) { if (wc.isDestroyed()) { bootSinks.delete(wc); continue; } wc.executeJavaScript(`window.__twBoot && __twBoot(${JSON.stringify(step)})`).catch(() => bootSinks.delete(wc)); }
+  };
+  boot(`twilight v${json('manifest.json').version || '?'} loaded`);
   let compareWaiting = false; // true while the Twilight half of a stock comparison is still being measured
   const slimCfg = () => { const v = json('config.json').slim; return v && typeof v === 'object' ? v : {}; };
   const SLIM = slimCfg();
@@ -73,6 +80,13 @@ if (process.type === 'browser') {
       return handle(ch, fn);
     };
   } catch (e) { note('slim hook failed: ' + (e && e.message || e)); }
+  try { // every native module Discord asks for at start-up shows on the start-up screen (skipped ones too)
+    const h0 = ipcMain.handle.bind(ipcMain);
+    ipcMain.handle = function (ch, fn) {
+      if (ch !== 'DISCORD_NATIVE_MODULES_INSTALL') return h0(ch, fn);
+      return h0(ch, (e, name, ...a) => { boot(`${BLOCK.has(name) ? 'skip' : 'load'} ${String(name).replace(/^discord_/, '')}${BLOCK.has(name) ? ' (slim)' : ''}`); return fn(e, name, ...a); });
+    };
+  } catch {}
   const slimDisk = () => {
     const { app } = require('electron');
     const appDir = path.dirname(process.execPath), root = path.dirname(appDir), cur = path.basename(appDir);
@@ -118,7 +132,7 @@ if (process.type === 'browser') {
   // in; Discord opens it before any mod can run, so the very first frame can still be Discord's). Only CSS plus a small text
   // swap, so Discord's own updates keep working inside it. config.json "splash": { on, logo: 'moon' | 'discord' | 'custom', text }.
   // A custom image (PNG, JPG, GIF, WebP) is saved as splash/custom.<ext> next to the mod.
-  const splashCfg = () => { const v = json('config.json').splash; return { on: true, logo: 'moon', text: '', ...(v && typeof v === 'object' ? v : {}) }; };
+  const splashCfg = () => { const v = json('config.json').splash; return { on: true, logo: 'moon', text: '', log: true, ...(v && typeof v === 'object' ? v : {}) }; };
   const splashImg = () => { try { const f = fs.readdirSync(path.join(__dirname, 'splash')).find(n => /^custom\.(png|jpe?g|gif|webp)$/i.test(n)); return f ? path.join(__dirname, 'splash', f) : null; } catch { return null; } };
   const MOON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><defs><linearGradient id="m" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4fbff"/><stop offset="1" stop-color="#8fc9f5"/></linearGradient></defs>'
     + '<path d="M128 28a76 76 0 1 0 44 118A62 62 0 0 1 128 28z" fill="url(#m)"/><circle cx="150" cy="62" r="4" fill="#dff4ff"/><circle cx="166" cy="98" r="2.6" fill="#b9ecff"/><circle cx="136" cy="40" r="2" fill="#b9ecff"/></svg>';
@@ -138,10 +152,20 @@ ${logo}
 .splash-status{color:#e6f6ff!important;letter-spacing:.01em}
 .splash-text>span:not(.splash-status){color:#7f9bb5!important}
 .progress .progress-bar{background:rgba(108,200,255,.12)!important}.progress .complete{background:linear-gradient(90deg,#3d7bfd,#6cc8ff)!important;box-shadow:0 0 8px rgba(108,200,255,.45)!important}
-#splash::after{content:${JSON.stringify(label.toUpperCase())};position:absolute;bottom:14px;left:0;right:0;text-align:center;font:700 10px var(--primary-font);letter-spacing:.18em;color:rgba(185,236,255,.5)}`;
+${splashCfg().log ? `#splash{padding-bottom:66px!important}
+#tw-boot{position:fixed;left:18px;right:18px;bottom:40px;z-index:3001;pointer-events:none;text-align:center;font:10.5px/14px Consolas,"Cascadia Mono",Menlo,monospace;color:rgba(185,236,255,.34)}
+#tw-boot div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;animation:twIn .25s ease-out}
+#tw-boot div::before{content:'> ';color:rgba(108,200,255,.45)}
+#tw-boot div:last-child{color:rgba(223,244,255,.82)}#tw-boot div:last-child::after{content:'_';animation:twBlink 1s steps(1) infinite}
+@keyframes twBlink{50%{opacity:0}}@keyframes twIn{from{opacity:0;transform:translateY(4px)}}` : ''}
+#splash::after{content:${JSON.stringify(label.toUpperCase())};position:absolute;bottom:13px;left:0;right:0;text-align:center;font:700 10px var(--primary-font);letter-spacing:.18em;color:rgba(185,236,255,.5)}`;
   };
   // Custom text replaces Discord's status line ("Starting…", "Checking for updates…"); the progress line under it stays Discord's.
-  const splashJs = text => `(() => { const t = ${JSON.stringify(String(text || '').slice(0, 60))}; if (!t) return;
+  const splashJs = (text, log) => `(() => {
+    if (${!!log} && !document.getElementById('tw-boot')) { const box = document.createElement('div'); box.id = 'tw-boot'; document.body.appendChild(box);
+      window.__twBoot = s => { const l = document.createElement('div'); l.textContent = s; box.appendChild(l); while (box.children.length > 3) box.firstChild.remove(); };
+      for (const s of ${JSON.stringify(bootSteps.slice(-3))}) __twBoot(s); }
+    const t = ${JSON.stringify(String(text || '').slice(0, 60))}; if (!t) return;
     const fix = () => { const s = document.querySelector('.splash-status'); if (s && s.textContent !== t) s.textContent = t; };
     fix(); new MutationObserver(fix).observe(document.getElementById('splash-mount') || document.body, { childList: true, subtree: true, characterData: true }); })();`;
   const styledSplash = new WeakSet();
@@ -149,7 +173,7 @@ ${logo}
     try {
       const wc = w.webContents; if (styledSplash.has(wc) || !/\/splash\/index\.html$/i.test(decodeURIComponent(require('url').parse(wc.getURL()).pathname || ''))) return;
       const c = splashCfg(); if (!c.on) return; styledSplash.add(wc);
-      wc.insertCSS(splashCss()).then(() => wc.executeJavaScript(splashJs(c.text))).catch(() => {});
+      wc.insertCSS(splashCss()).then(() => wc.executeJavaScript(splashJs(c.text, c.log))).then(() => { if (c.log) bootSinks.add(wc); }).catch(() => {});
     } catch {}
   };
   try {
@@ -169,7 +193,13 @@ ${logo}
     // Discord stores its main window's id in global.mainWindowId right after creating it, so sort windows one tick later.
     require('electron').app.on('browser-window-created', (_, w) => setImmediate(() => {
       if (w.isDestroyed()) return;
-      if (w.id === global.mainWindowId) { mainWin = w; w.once('closed', () => { if (mainWin === w) mainWin = null; }); return; }
+      if (w.id === global.mainWindowId) {
+        mainWin = w; w.once('closed', () => { if (mainWin === w) mainWin = null; });
+        boot('opening main window');
+        w.webContents.once('did-start-loading', () => boot('loading ' + (CHANNEL === 'stable' ? '' : CHANNEL + '.') + 'discord.com'));
+        w.webContents.once('dom-ready', () => boot('page loaded'));
+        return;
+      }
       if (!mainWin) return; // splash / updater windows
       popouts.add(w); w.once('closed', () => popouts.delete(w));
       try { if (hideOn()) w.setContentProtection(true); } catch {}
@@ -242,6 +272,7 @@ ${logo}
         const v = { ...splashCfg() };
         if (typeof c.set.on === 'boolean') v.on = c.set.on;
         if (['moon', 'discord', 'custom'].includes(c.set.logo)) v.logo = c.set.logo;
+        if (typeof c.set.log === 'boolean') v.log = c.set.log;
         if (typeof c.set.text === 'string') v.text = c.set.text.replace(/[\r\n]+/g, ' ').slice(0, 60);
         cfg.splash = v; writeAtomic('config.json', JSON.stringify(cfg, null, 2));
       }
@@ -290,17 +321,28 @@ ${logo}
       restart(c.on ? 'menu: safe mode' : 'menu: leave safe mode');
     }
     if (c?.type === 'relaunch') restart('menu');
+    // What's new: the changelog sections between two versions (from < v <= to), or the newest few. Plain text, parsed in the page.
+    if (c?.type === 'changelog') {
+      const ver = v => String(v || '0').split('.').map(n => parseInt(n, 10) || 0), cmp = (a, b) => { const x = ver(a), y = ver(b); for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] - y[i]; return 0; };
+      const parts = read('CHANGELOG.md').split(/^## +/m).slice(1).map(b => { const nl = b.indexOf('\n'); return { version: b.slice(0, nl).trim(), body: b.slice(nl + 1).trim() }; })
+        .filter(e => /^\d+\.\d+\.\d+$/.test(e.version));
+      const list = c.from ? parts.filter(e => cmp(e.version, c.from) > 0 && cmp(e.version, c.to || '999.0.0') <= 0) : parts.slice(0, Math.max(1, Math.min(10, c.count | 0 || 3)));
+      return { entries: list.slice(0, 12).map(e => ({ version: e.version, body: e.body.slice(0, 8000) })), total: parts.length };
+    }
+    if (c?.type === 'boot' && typeof c.step === 'string') { boot(c.step); return { ok: true }; }
     if (c?.type === 'ready') { note(`page ready ${CHANNEL} v${json('manifest.json').version || '?'}`); return { ok: true }; }
     return null;
   });
 
   // ---- auto updater: pulls manifest.json + listed files from the (private) GitHub repo ----
-  const SAFE = /^(core\.js|debug\.js|twilight\.js|plugins\/[\w-]+\.js|themes\/[\w-]+\.css)$/;
+  const SAFE = /^(core\.js|debug\.js|twilight\.js|measure\.js|stock\.js|CHANGELOG\.md|plugins\/[\w-]+\.js|themes\/[\w-]+\.css)$/;
+  // Versions: "1.19.0" is a release (on GitHub); "1.19.0.d3" is local dev build 3 of what will be released as 1.19.0.
+  const isDev = v => /\.d\d*$/i.test(String(v || ''));
   const num = x => parseInt(x, 10) || 0; // "13-beta" counts as 13
   const newer = (a, b) => {
     const x = String(a).split('.').map(num), y = String(b).split('.').map(num);
     for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
-    return false;
+    return isDev(b) && !isDev(a); // a release beats the local dev builds of the same number (1.19.0 > 1.19.0.d3)
   };
   const get = (url, token) => new Promise((resolve, reject) => {
     const req = https.get(url, {
@@ -326,7 +368,9 @@ ${logo}
     if (!repo) return null;
     const url = f => `https://api.github.com/repos/${repo}/contents/${f}?ref=${encodeURIComponent(branch)}`;
     const remote = JSON.parse(await get(url('manifest.json'), token));
-    if (!newer(remote.version, json('manifest.json').version || '0')) return null;
+    // Also re-fetch when a listed file is missing: up to 1.18.0 the updater skipped measure.js, stock.js and CHANGELOG.md.
+    const local = json('manifest.json'), missing = (local.files || []).some(f => SAFE.test(f) && !fs.existsSync(path.join(__dirname, f)));
+    if (!newer(remote.version, local.version || '0') && !(missing && remote.version === local.version)) return null;
     const unlock = takeLock(); if (!unlock) return null; // another Discord is updating right now: it will do it
     try {
       const files = (remote.files || []).filter(f => SAFE.test(f)).slice(0, 80);
@@ -399,7 +443,7 @@ ${logo}
 
   let pending, delivered = false;
   const { app, session } = require('electron');
-  ipcMain.on('twilight:code', e => { e.returnValue = build(); });
+  ipcMain.on('twilight:code', e => { const code = build(); e.returnValue = code; boot(`injecting twilight (${Math.round(code.length / 1024)} KB)`); });
   ipcMain.handle('twilight:update', async () => {
     const r = await pending;
     if (delivered) return null;

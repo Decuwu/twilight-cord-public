@@ -548,6 +548,12 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
         window.Twilight.version = opts.version; // set before plugins start so they can show it
         plugins.forEach(p => { if (!isOff(p.name) && !(ls.get('lite', false) && p.heavy)) { const t1 = performance.now(); try { cur = p.name; p.start?.(); } catch (e) { console.error('[twilight]', p.name, e); } finally { cur = null; slot(p.name).start = performance.now() - t1; } } });
         cost.start = performance.now() - t0;
+        // Start-up screen log: how many plugins started, then the moment Discord's connection is up.
+        try {
+          const n = [...plugins.keys()].filter(k => !isOff(k)).length;
+          window.Twilight.cmd({ type: 'boot', step: `${n} plugins started (${cost.start.toFixed(0)} ms)` }, 1500);
+          const undo = window.Twilight.onFlux({ CONNECTION_OPEN: () => { window.Twilight.cmd({ type: 'boot', step: 'connected, drawing discord' }, 1500); try { undo(); } catch {} } }, 'core');
+        } catch {}
         // Slim Discord: trim memory once Discord has been in the background (minimised, covered or in the tray) for a minute.
         // Uses Discord's own purgeMemory. No timer while Discord is on screen. Measured: about 20 MB back each time.
         let trimT = 0;
