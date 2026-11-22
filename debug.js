@@ -493,7 +493,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     const s = wn.show, n = s.entries.length;
     return [
       ...(s.fromUpdate ? [h('div', { className: 'twd-new' }, `Twilight updated to v${T.debug.version}`, h('small', { textContent: `Here is what changed since v${s.from}${n > 1 ? ` (${n} updates)` : ''}.` }))] : [sec("What's new")]),
-      ...s.entries.map(clCard),
+      ...s.entries.map(e => clCard(e)),
       action(s.fromUpdate ? 'Got it' : 'Back to the menu', seenWhatsNew, null, 'The full changelog is on GitHub (click the version at the top of Discord)'),
     ];
   };

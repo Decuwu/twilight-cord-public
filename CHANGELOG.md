@@ -1,5 +1,9 @@
 # Twilight-Cord changelog
 
+## 1.22.2
+**Fixed**
+- What's new: the second and third update cards showed "1" and "2" as their title instead of their version number.
+
 ## 1.22.1
 **Changed**
 - Start-up: if a file named `twilight-local.js` sits next to the mod, it is loaded first. Nothing changes if you have none.
