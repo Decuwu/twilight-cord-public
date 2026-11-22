@@ -1,5 +1,5 @@
 {
-  "version": "1.21.0",
+  "version": "1.22.0",
   "files": [
     "core.js",
     "debug.js",
@@ -16,6 +16,7 @@
     "plugins/petpet.js",
     "plugins/platformIndicators.js",
     "plugins/probe.js",
+    "plugins/questCompleter.js",
     "plugins/roleDividers.js",
     "plugins/serverMute.js",
     "plugins/silentTyping.js",

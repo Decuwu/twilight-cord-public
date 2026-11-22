@@ -286,6 +286,17 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
         return { ok: true };
       } catch (err) { return { ok: false, error: String(err.message || err).slice(0, 100) }; }
     }
+    // Quest lock: Stable and PTB run the same account, so only one open Discord may run the quest completer. The lock file names the
+    // Discord holding it; it counts as free when that Discord's process is gone or has not renewed it for 90 s.
+    if (c?.type === 'questLock' && ['take', 'release'].includes(c.op)) {
+      const f = 'quest.lock', now = Date.now(), cur = json(f);
+      let alive = false; try { if (cur.pid) { process.kill(cur.pid, 0); alive = true; } } catch {}
+      const mine = cur.channel === CHANNEL && cur.pid === process.pid, held = !mine && alive && cur.channel && now - (cur.at || 0) < 90000;
+      if (c.op === 'release') { if (mine) try { fs.rmSync(path.join(__dirname, f), { force: true }); } catch {} return { ok: true }; }
+      if (held) return { ok: false, holder: cur.channel };
+      try { writeAtomic(f, JSON.stringify({ channel: CHANNEL, pid: process.pid, at: now })); } catch (e) { return { ok: true, warn: String(e.message || e).slice(0, 80) }; }
+      return { ok: true, holder: CHANNEL };
+    }
     // Compare page: start a stock run of THIS Discord (it measures itself, then comes back with Twilight), or read the results.
     if (c?.type === 'compare') {
       if (c.op === 'start') { try { fs.writeFileSync(path.join(__dirname, `stock-${CHANNEL}.flag`), 'one start of plain Discord, measured'); } catch (err) { return { ok: false, error: String(err.message || err).slice(0, 80) }; } setTimeout(() => restart('compare with stock'), 400); return { ok: true }; }

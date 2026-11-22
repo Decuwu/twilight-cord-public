@@ -1,5 +1,13 @@
 # Twilight-Cord changelog
 
+## 1.22.0
+**New: Quest completer is now in the public build**
+- Twilight menu > **Quests** tab. It finishes accepted Discord Quests for you: video quests, "play for N minutes" quests and activity quests. It starts switched **off**; turn it on in the menu to use it.
+- **Against Discord's rules**: faking quest progress can get your account banned. Use it at your own risk.
+- It runs 2 video quests and 1 game quest at a time, accepts new quests if you leave that option on, and shows what is running and what is next. Rewards are never claimed behind your back: each finished quest gets a Claim button that opens Discord's own claim window.
+- Only one open Discord (Stable or PTB) runs it at a time, because both use the same account.
+- Not supported: quests that need a game's own achievements, and stream quests.
+
 ## 1.21.0
 **New: auto-translate new messages**
 - `/translate auto: Start` (or the switch in Twilight menu > Discord > Translate) translates each new message that arrives in the chat you are looking at, shown in small text under it. Messages that are already in your language are left alone. `/translate auto: Disable` stops it. On / Off and True / False work as well as Start / Disable.
