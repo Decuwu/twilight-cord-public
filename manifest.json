@@ -1,5 +1,5 @@
 {
-  "version": "1.20.0",
+  "version": "1.21.0",
   "files": [
     "core.js",
     "debug.js",
@@ -25,6 +25,7 @@
     "plugins/themeMaker.js",
     "plugins/translate.js",
     "plugins/typingSpeed.js",
+    "plugins/welcomeHint.js",
     "plugins/viewIcons.js",
     "twilight.js",
     "themes/midnight.css",

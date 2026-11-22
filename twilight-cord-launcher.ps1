@@ -9,14 +9,21 @@ $noBom = New-Object System.Text.UTF8Encoding $false
 if ($Action -eq 'repair') { $Action = 'install' }
 if ($channels.Contains($Action)) { $Which = $Action; $Action = 'install' }
 
-# The hook: a few lines inside Discord's own discord_desktop_core module (app.asar stays untouched).
-$hook = @(
-  "// Twilight hook (in a module, so Discord's own updates can still patch app.asar)",
-  "const __fs = require('fs'), __LOG = $((Join-Path $dest 'reports\launch.txt') | ConvertTo-Json);",
-  "const __note = s => { try { __fs.appendFileSync(__LOG, new Date().toISOString() + ' ' + s + '\n'); } catch (e) {} };",
-  "__note('core hook ran');",
-  "try { require($((Join-Path $dest 'twilight.js') | ConvertTo-Json)); __note('twilight.js loaded'); } catch (e) { __note('twilight.js FAILED: ' + (e && e.stack || e)); }",
-  "module.exports = require('./core.asar');", '') -join "`n"
+# Private build only (it has the owner-only developer bridge): PTB gets its own copy of the PUBLIC build in a "ptb" folder inside the mod folder, so Stable can run
+# dev builds while PTB stays on the latest public release (it updates itself from the public repo).
+$ptbDest = Join-Path $dest 'ptb'; $ptbReady = $false
+$split = Test-Path (Join-Path $dest 'plugins\devBridge.js')
+
+# The hook: a few lines inside Discord's own discord_desktop_core module (app.asar stays untouched). $d is the mod folder it loads from.
+function Get-Hook($d) {
+  @(
+    "// Twilight hook (in a module, so Discord's own updates can still patch app.asar)",
+    "const __fs = require('fs'), __LOG = $((Join-Path $d 'reports\launch.txt') | ConvertTo-Json);",
+    "const __note = s => { try { __fs.appendFileSync(__LOG, new Date().toISOString() + ' ' + s + '\n'); } catch (e) {} };",
+    "__note('core hook ran');",
+    "try { require($((Join-Path $d 'twilight.js') | ConvertTo-Json)); __note('twilight.js loaded'); } catch (e) { __note('twilight.js FAILED: ' + (e && e.stack || e)); }",
+    "module.exports = require('./core.asar');", '') -join "`n"
+}
 $stock = "module.exports = require('./core.asar');`n"
 
 function Get-Newest($base) {
@@ -61,12 +68,38 @@ function Ensure-Mod {
   Write-Host "Mod folder created: $dest"
 }
 
+# PTB: make sure its public copy exists (downloaded from the public repo, no token needed) and can run on its own.
+function Ensure-PtbCopy {
+  if (-not $split) { return }
+  try {
+    if (-not (Test-Path (Join-Path $ptbDest 'twilight.js'))) {
+      $pub = 'Decuwu/twilight-cord-public'
+      $h = @{ 'User-Agent' = 'twilight-cord'; Accept = 'application/vnd.github.raw+json' }
+      $get = { param($f) (Invoke-WebRequest -UseBasicParsing -Headers $h -Uri "https://api.github.com/repos/$pub/contents/$f`?ref=main").Content }
+      $man = & $get 'manifest.json'; if ($man -is [byte[]]) { $man = [Text.Encoding]::UTF8.GetString($man) }
+      $names = @(($man | ConvertFrom-Json).files) + 'manifest.json' + 'config.json' | Select-Object -Unique
+      $data = @{}
+      foreach ($f in $names) { $data[$f] = & $get $f }   # everything first, then write: a failed download leaves nothing half done
+      foreach ($f in $names) {
+        $out = Join-Path $ptbDest $f; New-Item -ItemType Directory -Force (Split-Path $out) | Out-Null
+        $c = $data[$f]; if ($c -is [byte[]]) { [IO.File]::WriteAllBytes($out, $c) } else { [IO.File]::WriteAllText($out, $c, $noBom) }
+      }
+    }
+    $tw = [IO.File]::ReadAllText((Join-Path $ptbDest 'twilight.js'))
+    if (-not $tw.Contains("path.basename(__dirname).toLowerCase() === 'ptb'")) { Write-Host 'Discord PTB: the public build is too old to run separately (needs the next public release). PTB stays on the shared build for now.' -ForegroundColor Yellow; return }
+    $seed = Join-Path $ptbDest 'settings.json'
+    if (-not (Test-Path $seed) -and (Test-Path (Join-Path $dest 'settings.json'))) { Copy-Item (Join-Path $dest 'settings.json') $seed }
+    $script:ptbReady = $true
+    Write-Host "Discord PTB: public build in $ptbDest (updates itself from the public repo)"
+  } catch { Write-Host "Discord PTB: could not set up the public copy ($($_.Exception.Message)). PTB stays on the shared build." -ForegroundColor Yellow }
+}
+
 try {
   $have = @($channels.Keys | Where-Object { Test-Path (Join-Path $env:LOCALAPPDATA $channels[$_]) })
   if (-not $have) { throw "No Discord found in $env:LOCALAPPDATA" }
   $targets = if ($channels.Contains($Which)) { @($Which) } else { $have }
   Write-Host ('Found: ' + ($have -join ', '))
-  if ($Action -eq 'install') { Ensure-Mod }
+  if ($Action -eq 'install') { Ensure-Mod; if ($targets -contains 'ptb') { Ensure-PtbCopy } }
   $ok = 0
   foreach ($c in $targets) {
     try {
@@ -82,7 +115,8 @@ try {
         if ($cur -and $cur -notmatch 'Twilight hook' -and $cur -notmatch "^\s*module\.exports\s*=\s*require\(\s*['""]\./core\.asar['""]\s*\)\s*;?\s*$") {
           Copy-Item $f ($f + '.twilight-backup') -Force; Write-Host "  (unusual index.js saved as index.js.twilight-backup)"
         }
-        [IO.File]::WriteAllText($f, $hook, $noBom); Write-Host "$($channels[$c]): $($app.Name) ready"
+        $d = if ($c -eq 'ptb' -and $ptbReady) { $ptbDest } else { $dest }
+        [IO.File]::WriteAllText($f, (Get-Hook $d), $noBom); Write-Host "$($channels[$c]): $($app.Name) ready$(if ($d -eq $ptbDest) { ' (public build)' })"
       }
       $ok++
     } catch { Write-Host "$($channels[$c]): $($_.Exception.Message)" -ForegroundColor Red }

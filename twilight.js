@@ -254,7 +254,7 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
     const body = JSON.stringify({ text: [text], target_lang: DL_TO[to] || to.toUpperCase() });
     const r = await httpsJson(`https://${deeplHost(key)}/v2/translate`, { method: 'POST', headers: { Authorization: 'DeepL-Auth-Key ' + key, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }, body });
     const tr = r.json?.translations?.[0];
-    if (!tr) return { error: r.status === 403 ? 'DeepL key not accepted' : r.status === 456 ? 'DeepL monthly limit reached' : 'DeepL ' + (r.status || r.error) };
+    if (!tr) return { error: r.status === 403 ? 'DeepL key not accepted' : r.status === 456 ? 'DeepL monthly limit reached' : r.status === 429 ? 'DeepL is rate limiting' : 'DeepL ' + (r.status || r.error), limited: r.status === 429 || r.status === 456 };
     return { text: tr.text, from: String(tr.detected_source_language || '').toLowerCase() };
   };
   const deeplUsage = async key => {
@@ -266,13 +266,13 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
     if (engine === 'deepl') {
       const r = await deepl(text, to, key).catch(e => ({ error: String(e?.message || e) }));
       if (!r.error) return { ...r, engine };
-      const g = await translate(text, to); return g.error ? { error: r.error } : { ...g, engine: 'google', fellBack: r.error };
+      const g = await translate(text, to); return g.error ? { error: r.error, limited: !!(r.limited || g.limited) } : { ...g, engine: 'google', fellBack: r.error, limited: !!r.limited };
     }
     return { ...(await translate(text, to)), engine: 'google' };
   };
   const translate = async (text, to) => {
     const r = await httpsJson(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(to)}&dt=t&q=${encodeURIComponent(text)}`);
-    if (!r.json) return { error: r.error || 'HTTP ' + r.status };
+    if (!r.json) return { error: r.status === 429 ? 'Google is rate limiting (HTTP 429)' : r.error || 'HTTP ' + r.status, limited: r.status === 429 };
     return { text: (r.json[0] || []).map(p => p[0]).join(''), from: r.json[2] };
   };
 
@@ -360,7 +360,8 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
     if (c?.type === 'coming') {
       const now = Date.now(); if (comingCache && now - comingCache.at < 1800000) return comingCache.r;
       let text = null, from = null;
-      try { const { repo, branch = 'main', token } = json('config.json'); if (repo) { text = (await get(`https://api.github.com/repos/${repo}/contents/COMING_SOON.md?ref=${encodeURIComponent(branch)}`, token)).toString('utf8'); from = 'github'; } } catch {}
+      if (isDev(json('manifest.json').version)) { const l = read('COMING_SOON.md'); if (l) { text = l; from = 'local'; } } // a dev build shows its own list (GitHub's only changes when a release is announced)
+      if (!text) try { const { repo, branch = 'main', token } = json('config.json'); if (repo) { text = (await get(`https://api.github.com/repos/${repo}/contents/COMING_SOON.md?ref=${encodeURIComponent(branch)}`, token)).toString('utf8'); from = 'github'; } } catch {}
       if (!text) { const local = read('COMING_SOON.md'); if (local) { text = local; from = 'local'; } }
       const r = { text: text ? text.slice(0, 8000) : null, from }; comingCache = { at: now, r }; return r;
     }
@@ -458,44 +459,49 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
   // Discord puts a brand-new app-* folder in place on every update, and that drops the hook. While Discord runs, watch the Discord
   // folders (event-driven, no polling) and put the hook back into any new build, so the next start is already patched.
   const HOOK_MARK = 'Twilight hook';
-  const hookText = () => [
+  const hookText = (D = __dirname) => [
     '// Twilight hook (in a module, so Discord\'s own updates can still patch app.asar)',
-    `const __fs = require('fs'), __LOG = ${JSON.stringify(path.join(__dirname, 'reports', 'launch.txt'))};`,
+    `const __fs = require('fs'), __LOG = ${JSON.stringify(path.join(D, 'reports', 'launch.txt'))};`,
     "const __note = s => { try { __fs.appendFileSync(__LOG, new Date().toISOString() + ' ' + s + '\\n'); } catch (e) {} };",
     "__note('core hook ran');",
     // A stock-<channel>.flag next to the mod gives ONE start of plain Discord (Twilight not loaded), for comparing against stock.
     // The flag is renamed to .used on the way, so the next start is back to normal by itself.
-    `const __ch = (b => b.includes('ptb') ? 'ptb' : b.includes('canary') ? 'canary' : 'stable')(require('path').basename(process.execPath).toLowerCase()), __stock = require('path').join(${JSON.stringify(__dirname)}, 'stock-' + __ch + '.flag');`,
+    `const __ch = (b => b.includes('ptb') ? 'ptb' : b.includes('canary') ? 'canary' : 'stable')(require('path').basename(process.execPath).toLowerCase()), __stock = require('path').join(${JSON.stringify(D)}, 'stock-' + __ch + '.flag');`,
     "let __plain = false; try { if (__fs.existsSync(__stock)) { __fs.renameSync(__stock, __stock + '.used'); __plain = true; __note('stock start ' + __ch + ' (Twilight not loaded)'); } } catch (e) {}",
-    `if (__plain) try { require(${JSON.stringify(path.join(__dirname, 'stock.js'))})(__ch); } catch (e) { __note('stock.js FAILED: ' + (e && e.message || e)); }`,
-    `if (!__plain) try { require(${JSON.stringify(path.join(__dirname, 'twilight.js'))}); __note('twilight.js loaded'); } catch (e) { __note('twilight.js FAILED: ' + (e && e.stack || e)); }`,
+    `if (__plain) try { require(${JSON.stringify(path.join(D, 'stock.js'))})(__ch); } catch (e) { __note('stock.js FAILED: ' + (e && e.message || e)); }`,
+    `if (!__plain) try { require(${JSON.stringify(path.join(D, 'twilight.js'))}); __note('twilight.js loaded'); } catch (e) { __note('twilight.js FAILED: ' + (e && e.stack || e)); }`,
     "module.exports = require('./core.asar');", ''].join('\n');
   const verCmp = (a, b) => { const x = a.replace('app-', '').split('.').map(num), y = b.replace('app-', '').split('.').map(num); for (let i = 0; i < 4; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0); return 0; };
-  const ensureHook = base => {
+  const ensureHook = (base, D = __dirname) => { // D: the mod folder this Discord loads from
     try {
       const app = fs.readdirSync(base).filter(x => /^app-\d/.test(x)).sort(verCmp).pop(); if (!app) return;
       const mods = path.join(base, app, 'modules'), core = fs.readdirSync(mods).filter(x => x.startsWith('discord_desktop_core')).sort().pop(); if (!core) return;
       const dir = path.join(mods, core, 'discord_desktop_core'), f = path.join(dir, 'index.js');
       if (!fs.existsSync(path.join(dir, 'core.asar'))) return; // the module is not fully in place yet: the next attempt will do it
       const cur = fs.readFileSync(f, 'utf8');
-      if (cur.includes(HOOK_MARK)) { if (cur !== hookText()) fs.writeFileSync(f, hookText()); return; } // ours: brought up to date when the template changes
+      if (cur.includes(HOOK_MARK)) { if (cur !== hookText(D)) fs.writeFileSync(f, hookText(D)); return; } // ours: brought up to date when the template changes
       if (!/^\s*module\.exports\s*=\s*require\(\s*['"]\.\/core\.asar['"]\s*\)\s*;?\s*$/.test(cur)) { // not Discord's usual one-liner: leave it, say so once
         fs.mkdirSync(path.join(__dirname, 'reports'), { recursive: true });
         if (!fs.existsSync(path.join(__dirname, 'reports', 'hook-skipped.txt'))) fs.writeFileSync(path.join(__dirname, 'reports', 'hook-skipped.txt'), `${new Date().toISOString()} ${app}: index.js is not the usual one-liner, left alone. Run the launcher to repair.\n`);
         return;
       }
-      fs.writeFileSync(f, hookText());
+      fs.writeFileSync(f, hookText(D));
       fs.mkdirSync(path.join(__dirname, 'reports'), { recursive: true });
       fs.appendFileSync(path.join(__dirname, 'reports', 'launch.txt'), `${new Date().toISOString()} hook put back into ${path.basename(base)}/${app}\n`);
     } catch {}
   };
   const keepHook = () => {
     const local = process.env.LOCALAPPDATA; if (!local) return;
+    // PTB can have its own copy of the mod in a "ptb" folder next to this one (pinned to the public build). That copy only looks after PTB;
+    // this folder keeps Stable and Canary, and also puts PTB's hook back (pointing at the ptb copy) if PTB updated while it was not running.
+    const own = path.basename(__dirname).toLowerCase() === 'ptb', ptbCopy = !own && fs.existsSync(path.join(__dirname, 'ptb', 'twilight.js')) ? path.join(__dirname, 'ptb') : null;
     for (const d of ['Discord', 'DiscordPTB', 'DiscordCanary']) {
+      if (own && d !== 'DiscordPTB') continue;
+      const D = d === 'DiscordPTB' && ptbCopy ? ptbCopy : __dirname;
       const base = path.join(local, d); if (!fs.existsSync(base)) continue;
-      ensureHook(base);
+      ensureHook(base, D);
       let t = 0;
-      try { fs.watch(base, { persistent: false }, (ev, name) => { if (!/^app-/.test(String(name || 'app-'))) return; clearTimeout(t); t = setTimeout(() => { ensureHook(base); setTimeout(() => ensureHook(base), 30000); setTimeout(() => ensureHook(base), 120000); }, 5000); }); } catch {}
+      try { fs.watch(base, { persistent: false }, (ev, name) => { if (!/^app-/.test(String(name || 'app-'))) return; clearTimeout(t); t = setTimeout(() => { ensureHook(base, D); setTimeout(() => ensureHook(base, D), 30000); setTimeout(() => ensureHook(base, D), 120000); }, 5000); }); } catch {}
     }
   };
 

@@ -3,6 +3,9 @@
 // under that one message; press the button again to hide it. Nothing is translated in the background, and no message is scanned.
 // PRIVACY: only the text of a message you click is sent to the translator you picked (Google, or DeepL with your own key),
 // through Discord's main process. Your DeepL key stays in Twilight's settings on this PC.
+// Auto-translate (/translate auto:Start, or the switch in the Translate tab): the text of each NEW message that arrives in the chat you are looking at is
+// sent to the translator you picked, and shown in small subtext when it is not already in your language. Off by default; it turns itself off when the
+// translator rate-limits (or stops answering). Messages from before you switched it on, other chats and your own messages are never sent.
 // Text already in the language you translate into is left alone (default: English). Pick another language in the Translate tab and
 // everything you click is translated into that one instead.
 Twilight.definePlugin({
@@ -35,12 +38,14 @@ Twilight.definePlugin({
           usage] : []),
         T.ui.sec('Messages I read: translate into'),
         h('div', { className: 'twd-chips' }, ...Object.entries(LANG).map(([k, n]) => h('div', { className: 'twd-chip' + (k === to ? ' on' : ''), textContent: n, onclick: () => { T.setOpt('Translate', 'to', k); T.debug.refresh(); } }))),
+        T.ui.sec('New messages'),
+        T.ui.ledRow('Translate new messages automatically', !!T.ls.get('trAuto', false), () => p.setAuto(!T.ls.get('trAuto', false), true), 'The text of each new message in the chat you are looking at is sent to the translator and shown under it if it is not already in your language. Turns itself off if the translator rate-limits. Also: /translate auto: Start / Disable (On / Off and True / False work too)'),
         T.ui.sec('Messages I send'),
         T.ui.ledRow('Translate what I send', out.on && !!out.to, () => { if (!out.to) return T.notify('Translate', 'Pick a language below first', 2500, 'warn'); p.setOut({ on: !out.on }); }, out.to ? `Into ${LANG[out.to] || out.to}. Also the 文A button in the message box, or /translate <language>` : 'Pick a language below, then switch this on'),
         h('div', { className: 'twd-chips' }, ...Object.entries(LANG).map(([k, n]) => h('div', { className: 'twd-chip' + (k === out.to ? ' on' : ''), textContent: n, onclick: () => p.setOut({ to: k, on: true }) }))),
         T.ui.ledRow('Show the button in the message box', T.opt('Translate', 'outButton', true), () => { T.setOpt('Translate', 'outButton', !T.opt('Translate', 'outButton', true)); p.outButton(); T.debug.refresh(); }, '', 'sub'),
         h('div', { className: 'twd-out', textContent: 'Press Enter and your message is translated right in the message box, so you can check it; press Enter again to send it. Mentions, emojis, links and `code` stay as they are; commands (/...) and code blocks are never translated.' }),
-        T.ui.info('Translated this session', `${p.done || 0} read · ${p.sent || 0} sent`),
+        T.ui.info('Translated this session', `${p.done || 0} read (${p.auto || 0} automatic) · ${p.sent || 0} sent`),
       ];
     },
   },
@@ -104,9 +109,20 @@ Twilight.definePlugin({
       });
     };
     // /translate <language>: pick the language for what you send (or Off), from Discord's own command list.
-    T.slash?.add?.({ name: 'translate', id: '9000000000000000016', desc: 'Translate the messages you send into a language (or turn it off)',
-      opts: [{ name: 'language', type: 3, description: 'Language your messages go out in', required: true, choices: [{ name: 'Off', value: 'off' }, ...Object.entries(me.LANG).map(([value, name]) => ({ name, value }))] }],
-      run: v => { const l = v.language; if (!l || l === 'off') { me.setOut({ on: false }); T.notify('Translate', 'Your messages go out as you write them', 2500, 'info'); } else { me.setOut({ to: l, on: true }); T.notify('Translate', `Your messages now go out in ${me.LANG[l] || l}`, 2500, 'success'); } } });
+    T.slash?.add?.({ name: 'translate', id: '9000000000000000016', desc: 'Translate what you send into a language, or translate new messages as they arrive',
+      opts: [
+        { name: 'language', type: 3, description: 'Language your messages go out in', required: false, choices: [{ name: 'Off', value: 'off' }, ...Object.entries(me.LANG).map(([value, name]) => ({ name, value }))] },
+        { name: 'auto', type: 3, description: 'Translate each new message that arrives in this chat (turns itself off if the translator rate-limits)', required: false, choices: [{ name: 'Start', value: 'start' }, { name: 'Disable', value: 'disable' }] },
+      ],
+      run: v => {
+        if (v.auto) { // Start / On / True turn it on; Disable / Off / False (or anything else you type) turn it off
+          const w = String(v.auto).trim().toLowerCase(); me.setAuto(/^(start|on|true|yes|enable|enabled|1)$/.test(w), true);
+        }
+        const l = v.language;
+        if (l === 'off') { me.setOut({ on: false }); T.notify('Translate', 'Your messages go out as you write them', 2500, 'info'); }
+        else if (l) { me.setOut({ to: l, on: true }); T.notify('Translate', `Your messages now go out in ${me.LANG[l] || l}`, 2500, 'success'); }
+        else if (!v.auto) T.notify('Translate', 'Pick a language for what you send, or auto: Start / Disable for new messages', 4000, 'info');
+      } });
     me.warned = false; me.cache = new Map(); me.done = 0; me.placed = null; me.tried = 0; me.busy = new Set();
     me.css = Object.assign(document.createElement('style'), { textContent: '.tw-tr{margin-top:2px;font:400 12px/1.3 "gg sans","Segoe UI",sans-serif;color:var(--text-muted,#8aa6bf);opacity:.9;white-space:pre-wrap}.tw-tr b{font-weight:600;opacity:.7}.tw-trwrap{display:contents}.tw-trbtn{cursor:pointer;display:flex;align-items:center;justify-content:center}.tw-trbtn svg{width:20px;height:20px;fill:currentColor}.tw-trbtn.on{color:var(--brand-500,#5b9dff)}' });
     document.documentElement.append(me.css);
@@ -182,8 +198,53 @@ Twilight.definePlugin({
       clearTimeout(pend); pend = setTimeout(() => { attach(li); if (!li.querySelector('[class*="buttonsInner"] .tw-trbtn')) setTimeout(() => attach(li), 300); }, 80);
     };
     document.addEventListener('mouseover', me.over, { passive: true, capture: true });
+
+    // ---- Auto-translate: each NEW message in the chat you are looking at (not history, not your own) goes through the same translator.
+    // One at a time with a short gap, at most 8 waiting. A rate limit (HTTP 429, DeepL 456) switches it off with a notice; so do 5 failures in a row.
+    me.autoOn = () => !!T.ls.get('trAuto', false);
+    me.auto = me.auto || 0; me.q = []; me.qBusy = false; me.fails = 0;
+    me.setAuto = (on, say) => {
+      on = !!on; if (on === me.autoOn() && !say) return;
+      T.ls.set('trAuto', on); me.fails = 0; me.q.length = 0; me.applyAuto(); T.debug?.refresh?.();
+      if (say) T.notify('Translate', on ? `Auto-translate on: new messages that are not in ${me.LANG[T.opt('Translate', 'to', 'en')] || T.opt('Translate', 'to', 'en')} get a translation under them. It turns itself off if the translator rate-limits` : 'Auto-translate off', on ? 5000 : 2500, on ? 'success' : 'info');
+    };
+    const stopLimited = why => {
+      if (!me.autoOn()) return;
+      T.ls.set('trAuto', false); me.q.length = 0; me.applyAuto(); T.debug?.refresh?.();
+      T.notify('Translate', `Auto-translate turned off: ${why}. Turn it back on with /translate auto: Start`, 9000, 'warn');
+    };
+    const autoOne = async li => {
+      const el = li.querySelector('[id^="message-content-"]'), text = (el?.innerText || '').trim();
+      if (!el || text.length < 2 || !/\p{L}{2,}/u.test(text) || li.querySelector('.tw-tr')) return;
+      const to = T.opt('Translate', 'to', 'en'), engine = T.opt('Translate', 'engine', 'google') === 'deepl' ? 'deepl' : 'google';
+      const r = await T.cmd({ type: 'translate', text: text.slice(0, 1500), to, engine, key: engine === 'deepl' ? T.ls.get('deeplKey', '') : undefined }, 15000).catch(() => null);
+      if (r && r.text && !r.error) { // show what we got even when this was the last one before a limit
+        me.fails = 0;
+        if (r.from !== to && r.text.trim() !== text && li.isConnected && !li.querySelector('.tw-tr')) { note(li, r.text, false, r.from); me.done++; me.auto++; }
+      } else if (!r?.limited && ++me.fails >= 5) return stopLimited('the translator is not answering');
+      if (r?.limited) stopLimited(`${engine === 'deepl' ? 'DeepL' : 'Google'} is rate limiting${r.fellBack ? ' (' + String(r.fellBack).slice(0, 40) + ')' : ''}`);
+    };
+    const pump = async () => {
+      if (me.qBusy) return; me.qBusy = true;
+      try { while (me.q.length && me.autoOn()) { const li = me.q.shift(); await autoOne(li); await new Promise(res => setTimeout(res, 350)); } } finally { me.qBusy = false; }
+    };
+    me.onMsg = ev => {
+      try {
+        const m = ev?.message; if (!m || ev.optimistic || !m.id || !m.channel_id || !(m.type === 0 || m.type === 19)) return;
+        if (m.author?.id === meId() || (m.content || '').trim().length < 2) return;
+        if (m.channel_id !== T.findStore('SelectedChannelStore')?.getChannelId?.()) return; // only the chat you are looking at
+        let tries = 0; const find = () => { // wait for Discord to draw the row
+          const li = document.getElementById(`chat-messages-${m.channel_id}-${m.id}`);
+          if (li) { if (me.q.length < 8) { me.q.push(li); pump(); } } else if (++tries < 12 && me.autoOn()) setTimeout(find, 250);
+        };
+        setTimeout(find, 150);
+      } catch {}
+    };
+    me.applyAuto = () => { me.undoAuto?.(); me.undoAuto = null; if (me.autoOn()) me.undoAuto = T.onFlux({ MESSAGE_CREATE: me.onMsg }, 'Translate auto'); };
+    me.applyAuto();
   },
   stop() {
+    this.undoAuto?.(); this.undoAuto = null; this.q = [];
     this.undoBtn?.(); this.undoBtn = null; Twilight.slash?.remove?.('translate');
     window.removeEventListener('keydown', this.onKey, true);
     document.removeEventListener('mouseover', this.over, true); this.css?.remove();

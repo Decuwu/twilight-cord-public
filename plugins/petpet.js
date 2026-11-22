@@ -10,8 +10,7 @@ function petFrames(avatar, hand, S, N, mk) {
   for (let i = 0; i < N; i++) {
     const sq = i < N / 2 ? i : N - i, w = 0.8 + sq * 0.02, hh = 0.8 - sq * 0.05, ox = (1 - w) * 0.5 + 0.1, oy = 1 - hh - 0.08;
     const c = mk(S, S), g = c.getContext('2d');
-    g.save(); g.beginPath(); g.ellipse((ox + w / 2) * S, (oy + hh / 2) * S, w * S / 2, hh * S / 2, 0, 0, 6.283); g.clip();
-    g.drawImage(avatar, ox * S, oy * S, w * S, hh * S); g.restore();
+    g.drawImage(avatar, ox * S, oy * S, w * S, hh * S); // the full square picture, not cropped to a circle
     const hs = 0.62; // the hand is drawn smaller than the picture so it does not hide the avatar
     g.drawImage(hand, Math.min(4, sq) * 112, 0, 112, 112, 0, Math.round(sq * 6 * k * hs), S * hs, S * hs);
     frames.push(g.getImageData(0, 0, S, S));
@@ -28,7 +27,7 @@ Twilight.definePlugin({
     render() {
       const T = Twilight, { h } = T, p = T.plugins.get('Petpet');
       const q = h('input', { placeholder: 'Name, @name or user ID (empty = this DM)', value: p.last || '' });
-      const prev = h('img', { style: 'display:block;width:128px;height:128px;margin:8px 0;border-radius:50%;background:rgba(255,255,255,.05)' });
+      const prev = h('img', { style: 'display:block;width:128px;height:128px;margin:8px 0;border-radius:6px;background:rgba(255,255,255,.05)' });
       if (p.url) prev.src = p.url;
       const make = async attach => {
         try {

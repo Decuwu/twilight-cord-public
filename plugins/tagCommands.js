@@ -22,7 +22,7 @@ Twilight.definePlugin({
   build() {
     const me = this, APP = me.APP, ver = '9000000000000000100', names = me.tagNames();
     me.sig = me.sigNow();
-    const opt = o => { const r = { type: o.type || 3, name: o.name, description: o.description, required: !!o.required, ...(o.type ? {} : { max_length: o.max_length }), description_localized: o.description, name_localized: o.name }; if (o.tags && names.length) r.choices = names.map(n => ({ name: n, value: n })); return r; };
+    const opt = o => { const r = { type: o.type || 3, name: o.name, description: o.description, required: !!o.required, ...(o.type ? {} : { max_length: o.max_length }), description_localized: o.description, name_localized: o.name }; if (o.tags && names.length) r.choices = names.map(n => ({ name: n, value: n })); else if (o.choices?.length) r.choices = o.choices.map(x => ({ name: x.name, value: x.value, name_localized: x.name })); return r; }; // a plugin's own fixed choices (e.g. /translate auto: Start / Disable) show as a pick list
     const commands = {};
     for (const c of me.all()) {
       const raw = c.opts.map(opt);

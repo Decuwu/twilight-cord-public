@@ -12,11 +12,25 @@ Twilight.definePlugin({
   hidden() { return Twilight.opt('SilentTyping', 'hide', true); },
   start() {
     const T = Twilight, me = this;
-    // Discord asks startTyping() while you type; while hiding is on, that call does nothing. Read live, so the button works instantly.
-    this.cancel = T.waitFor(m => m.startTyping && m.stopTyping, m => {
-      me.mod = m; me.orig = m.startTyping;
-      try { m.startTyping = function (...a) { return me.hidden() ? undefined : me.orig.apply(this, a); }; } catch (e) { console.warn('[twilight] SilentTyping failed', e); }
-    });
+    // Discord tells everyone "X is typing" with one small web request (POST /channels/<id>/typing) while you write. While hiding is on, that request is
+    // never sent: it is answered on the spot with "204 no content", so Discord thinks it worked and nothing leaves your PC. Switched live by the button.
+    // (Older versions patched Discord's startTyping function; Discord moved it, so this works at the request itself.)
+    const isTyping = u => /\/channels\/\d+\/typing(\?|$)/.test(String(u));
+    me.nativeOpen = XMLHttpRequest.prototype.open; me.nativeSend = XMLHttpRequest.prototype.send; me.nativeFetch = window.fetch;
+    me.xhrOpen = function (m, u, ...r) { this.__twTyping = isTyping(u); return me.nativeOpen.call(this, m, u, ...r); };
+    me.xhrSend = function (...a) {
+      if (this.__twTyping && me.hidden()) {
+        const x = this; me.blocked = (me.blocked || 0) + 1;
+        setTimeout(() => { try {
+          for (const [k, v] of Object.entries({ readyState: 4, status: 204, statusText: 'No Content', response: '', responseText: '', responseURL: '' })) Object.defineProperty(x, k, { value: v, configurable: true });
+          x.dispatchEvent(new Event('readystatechange')); x.dispatchEvent(new ProgressEvent('load')); x.dispatchEvent(new ProgressEvent('loadend'));
+        } catch {} }, 0);
+        return;
+      }
+      return me.nativeSend.apply(this, a);
+    };
+    me.fetchHook = function (u, ...r) { if (me.hidden() && isTyping(u?.url || u)) { me.blocked = (me.blocked || 0) + 1; return Promise.resolve(new Response(null, { status: 204 })); } return me.nativeFetch.call(this, u, ...r); };
+    XMLHttpRequest.prototype.open = me.xhrOpen; XMLHttpRequest.prototype.send = me.xhrSend; window.fetch = me.fetchHook;
     const button = () => {
       me.undoBtn?.(); me.undoBtn = null;
       if (!T.opt('SilentTyping', 'button', true)) return;
@@ -32,8 +46,10 @@ Twilight.definePlugin({
     window.addEventListener('tw-opt', this.onOpt);
   },
   stop() {
-    this.cancel?.(); this.undoBtn?.(); this.undoBtn = null;
+    this.undoBtn?.(); this.undoBtn = null;
     window.removeEventListener('tw-opt', this.onOpt);
-    if (this.mod && this.orig) this.mod.startTyping = this.orig;
+    if (XMLHttpRequest.prototype.open === this.xhrOpen) XMLHttpRequest.prototype.open = this.nativeOpen; // only if nobody wrapped ours since
+    if (XMLHttpRequest.prototype.send === this.xhrSend) XMLHttpRequest.prototype.send = this.nativeSend;
+    if (window.fetch === this.fetchHook) window.fetch = this.nativeFetch;
   },
 });

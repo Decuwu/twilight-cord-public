@@ -191,6 +191,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
         slider('Corner radius', 0, 28, 1, fx().rad, v => v + 'px', v => setFx('rad', v)),
         sec('Sidebar order'),
         h('small', { className: 'twd-out', textContent: 'Drag a page in the sidebar to move it inside its group. Drag a group heading (or Home) to move the whole group.' }),
+        action('Show the welcome tip again', () => { T.welcome?.show?.(); toggle(false); }, null, 'The "click me" arrow at the Twilight label and the menu key'),
         action('Reset sidebar order', () => { T.ls.set('menuOrder', {}); render(); T.notify('Twilight', 'Sidebar back to the default order', 2000, 'info'); }),
         sec('Look'),
         action('Change the colours: Settings › CSS › Menu style', () => { goto('Settings', 'CSS'); body.scrollTop = 0; render(); }, null, 'Menu styles and your own menu CSS'),
@@ -804,7 +805,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
   // The menu key (or Esc on the Menu): open the Menu; from the Menu go back to the chat (which keeps its memory), or close if there is no chat.
   const menuToggle = force => {
     const open = popup.isOpen() && POP.view === 'Menu' && !POP.box.dataset.min, want = force ?? !open;
-    if (want) return popup.open('Menu');
+    if (want) { T.welcome?.done?.(); return popup.open('Menu'); } // opening the menu ends the first-run tip
     if (popup.isOpen() && POP.views.Chat) return popup.show('Chat');
     popup.close();
   };
@@ -939,6 +940,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
 
   T.debug = {
     applyMenuStyle,
+    keyName: spec => keyName(spec),
     paintAsst: () => T.debug_paintAsst(),
     key: 'ctrl+t',
     version: '?',

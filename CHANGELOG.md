@@ -1,5 +1,22 @@
 # Twilight-Cord changelog
 
+## 1.21.0
+**New: auto-translate new messages**
+- `/translate auto: Start` (or the switch in Twilight menu > Discord > Translate) translates each new message that arrives in the chat you are looking at, shown in small text under it. Messages that are already in your language are left alone. `/translate auto: Disable` stops it. On / Off and True / False work as well as Start / Disable.
+- It only touches messages that arrive after you switch it on, in the chat you have open (never your own, never history). The text is sent to the translator you picked (Google, or DeepL with your key).
+- If the translator rate-limits, Twilight shows a notice and switches auto-translate off by itself (the same after 5 failed tries in a row).
+
+**Changed: /petpet uses the full square picture**
+- The avatar is no longer cropped to a circle in the pet-pet GIF.
+
+**Fixed: silent typing works again**
+- After a Discord update the typing indicator was getting through even with Silent typing on. It now stops the "is typing" request itself, so nothing is sent while it is on (button in the message box, or Tools).
+
+**New: first-run tip**
+- On a fresh install, a small "click me" arrow points at the **Twilight** label at the top of Discord, with a card showing your menu key (Ctrl+T by default) and an **Open menu** button.
+- It disappears as soon as you open the menu (label, key or button), or after 3 launches. Nobody who already uses Twilight gets it unasked.
+- Show it again any time: Twilight menu > Settings > Menu > **Show the welcome tip again**.
+
 ## 1.20.0
 
 **New: menu styles**
