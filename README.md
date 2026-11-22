@@ -9,15 +9,16 @@ A tiny Discord client mod for Discord Stable and Discord PTB: webpack patching, 
 - `debug.js` – debug menu (Ctrl+T or the Debug button next to Add Friend): test notifications, plugin start/stop, Quick CSS, webpack info
 - `config.json` – your settings (never overwritten by updates): repo, token, `debugKey`, `disabled` plugins, enabled `themes`
 - `plugins/*.js`, `themes/*.css`
-- `installer.js` – Windows installer for Discord Stable and/or PTB (packaged to an exe with `npm run build`)
+- `installer.js` – source of the Windows launcher (packaged to `twilight-cord-launcher.exe` with `npm run build`)
 
 ## Install
-Run `twilight-cord-installer.exe` with Discord fully closed (check the tray) and pick Stable, PTB or both. Re-run it after Discord updates itself.
-Command line: `twilight-cord-installer.exe install stable` (or `ptb`, `all`; `uninstall` works the same way).
-Both channels share one mod folder (`%APPDATA%\twilight-cord`), so settings, plugins and updates are identical.
+1. Download `twilight-cord-launcher.exe` from the [latest release](https://github.com/Decuwu/twilight-cord-public/releases/latest).
+2. Close Discord completely (check the tray) and run it. It installs the current build into every Discord it finds (Stable, PTB, Canary) and needs no answers.
+3. Start Discord. The mod updates itself from this repo from then on and puts its own hook back after Discord updates; run the launcher again only if a Discord stops loading it.
 
-## Install / repair
-Run `twilight-cord-launcher.exe` (built from `installer.js` with `npm run build`). It installs the current build into every Discord found (Stable, PTB, Canary) and needs no answers. The mod re-installs its own hook after Discord updates; run the launcher again only if a Discord stops loading it.
+Command line: `twilight-cord-launcher.exe [install|repair|uninstall] [stable|ptb|canary|all]` (default: install into every Discord found).
+All channels share one mod folder (`%APPDATA%\twilight-cord`), so settings, plugins and updates are identical.
+Windows may show a SmartScreen warning because the exe is unsigned; choose More info, then Run anyway. You can also build it yourself: `npm install`, then `npm run build` (output in `dist/`).
 
 ## Auto-update
 The updater fetches `manifest.json` from the repo on each launch; if its version is newer it downloads the listed files.

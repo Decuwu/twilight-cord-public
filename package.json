@@ -1,10 +1,10 @@
 {
   "name": "twilight-cord",
-  "version": "1.15.0",
+  "version": "1.20.0",
   "private": true,
   "bin": "installer.js",
   "scripts": {
-    "build": "pkg . --targets node24-win-x64 --output dist/twilight-cord-launcher.exe",
+    "build": "pkg . --targets node22-win-x64 --output dist/twilight-cord-launcher.exe",
     "scrub": "node tools/scrub-check.js .",
     "public": "node tools/make-public.js Decuwu/twilight-cord-public"
   },
