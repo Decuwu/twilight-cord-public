@@ -1,5 +1,9 @@
 # Twilight-Cord changelog
 
+## 1.22.1
+**Changed**
+- Start-up: if a file named `twilight-local.js` sits next to the mod, it is loaded first. Nothing changes if you have none.
+
 ## 1.22.0
 **New: Quest completer is now in the public build**
 - Twilight menu > **Quests** tab. It finishes accepted Discord Quests for you: video quests, "play for N minutes" quests and activity quests. It starts switched **off**; turn it on in the menu to use it.

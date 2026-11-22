@@ -480,6 +480,8 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
     `const __ch = (b => b.includes('ptb') ? 'ptb' : b.includes('canary') ? 'canary' : 'stable')(require('path').basename(process.execPath).toLowerCase()), __stock = require('path').join(${JSON.stringify(D)}, 'stock-' + __ch + '.flag');`,
     "let __plain = false; try { if (__fs.existsSync(__stock)) { __fs.renameSync(__stock, __stock + '.used'); __plain = true; __note('stock start ' + __ch + ' (Twilight not loaded)'); } } catch (e) {}",
     `if (__plain) try { require(${JSON.stringify(path.join(D, 'stock.js'))})(__ch); } catch (e) { __note('stock.js FAILED: ' + (e && e.message || e)); }`,
+    // An optional twilight-local.js next to the mod is loaded first (for local additions that no update should touch).
+    `if (!__plain) try { const __l = ${JSON.stringify(path.join(D, 'twilight-local.js'))}; if (__fs.existsSync(__l)) { require(__l); __note('twilight-local.js loaded'); } } catch (e) { __note('twilight-local.js FAILED: ' + (e && e.stack || e)); }`,
     `if (!__plain) try { require(${JSON.stringify(path.join(D, 'twilight.js'))}); __note('twilight.js loaded'); } catch (e) { __note('twilight.js FAILED: ' + (e && e.stack || e)); }`,
     "module.exports = require('./core.asar');", ''].join('\n');
   const verCmp = (a, b) => { const x = a.replace('app-', '').split('.').map(num), y = b.replace('app-', '').split('.').map(num); for (let i = 0; i < 4; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0); return 0; };
