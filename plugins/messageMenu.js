@@ -18,8 +18,7 @@ Twilight.definePlugin({
   },
   go(r) {
     const path = `/channels/${r.guildId || '@me'}/${r.channelId}/${r.id}`;
-    try { const R = Twilight.findByProps('transitionTo'); if (R) return R.transitionTo(path); } catch {}
-    history.pushState({}, '', path); window.dispatchEvent(new PopStateEvent('popstate'));
+    Twilight.go(path);
   },
   clean(msg) {
     const T = Twilight, US = T.findStore('UserStore'), CS = T.findStore('ChannelStore');

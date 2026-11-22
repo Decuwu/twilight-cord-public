@@ -2,7 +2,7 @@
 Twilight.definePlugin({
   name: 'QuickServerMute',
   vs: "Muting a server takes several clicks through menus",
-  desc: 'Tools tab: mute / unmute the current server',
+  desc: 'Mute or unmute the server you are in, also for 1 or 8 hours (Discord › Servers)',
   actionOnly: true,
   actions: (() => {
     const guild = () => {

@@ -1,5 +1,53 @@
 # Twilight-Cord changelog
 
+## 1.20.0
+
+**New: menu styles**
+- Twilight menu > Settings > CSS > **Menu style**: pick how Twilight looks. Discord (the default, follows your Discord theme), Dusk, Midnight, Paper, Ember or Rose. One click, remembered.
+- **Dusk** is deep indigo with a soft violet glow on the selected channel, your mentions, the text box and menus.
+- The style colours Discord itself too, not only the Twilight window. Switch **Also colour Discord itself** off to keep Discord as it is.
+
+**New: clean user panel buttons**
+- The mic, headphones and settings buttons (bottom left) are now plain icons with a soft round glow on hover, small dropdown arrows, and a red icon when muted or deafened. Works with every menu style. Switch: Twilight menu > Settings > CSS > Menu style > **Clean mic, headphone and settings buttons**.
+
+**Improved: platform indicators**
+- Drawn icons (monitor, phone, globe) replace the emoji, coloured by status: green online, yellow idle, red do not disturb. Hover for the exact status.
+- Now shown above every message (before it only appeared on replies), in the member list and next to people in your direct messages.
+- Options for where it shows, and to turn the colours off.
+
+**Changed: an easier menu**
+- Opens on a new **Home** page: version and plugin count, **What's new**, **Coming soon…** (what the next update brings, kept up to date on GitHub), **Jump back in** buttons for the pages you used last, and quick actions (mark everything as read, lightweight mode, safe mode).
+- **Friends** is now a tab at the top of the Twilight window, next to Menu and Search.
+- The side bar is grouped: **Local** (Self, Privacy, Channel, Message log), **Discord** (Servers, Performance, Start-up, Tools) and **Settings** (CSS, Menu, Notifications, Plugins). Global and General are gone; their pages moved into these groups.
+- **Privacy** now also holds ClearURLs and **Hide pop-out windows from screen share**.
+- **Message log** has its own page: search by name, server, channel or text, filter deleted / edited and by server, and click any entry to jump to that spot in the chat. The clean-up buttons sit at the bottom.
+- On **Self**, Tags is last so its list can grow without pushing the other switches down.
+- New **Discord › Servers** page: mark this server or everything as read, and mute this server (on/off, 1 hour, 8 hours).
+- Drag pages in the side bar to reorder them inside their group, or drag a group heading (or Home) to move the whole group. Your order is remembered; **Settings › Menu › Reset sidebar order** puts it back.
+- **Feedback** in the menu's footer: report a bug or share an idea with your name (and Discord ID if you like). It goes straight to the Twilight team on Discord; no account or sign-in needed.
+- **Settings › CSS › Menu CSS**: restyle the Twilight window itself with your own CSS (with an example to start from).
+- Rows are flat lines instead of boxes, and on/off now shows as a small switch instead of ON/OFF with a coloured light.
+- Removed the Snippets plugin (Tags does the same job), the Hello example plugin and the "What is different" shortcuts.
+
+**New: pick your translator**
+- Translate has its own page, **Discord › Translate**. **Translator**: Google (default) or **DeepL** (best quality; paste your own free key, it stays on your PC and shows how much of your monthly allowance is used). If DeepL fails, Google steps in.
+
+**New: translate what you send**
+- Discord › Translate › **Messages I send**: pick a language, and when you press **Enter** your message is translated right in the message box so you can check it; press **Enter** again to send. Mentions, emojis, links and `code` are kept as they are; commands and code blocks are never translated.
+- A **文A button** in the message box (left of GIF) turns it on and off and shows the language (ES, FR…); right-click it for the language list.
+- **/translate** *language* changes the language from any chat (or **Off**).
+
+**New: Silent typing button**
+- A button in the message box turns Silent typing on and off; it is lit while nobody can see you typing.
+
+**Fixed: Translate**
+- The Translate button sits right next to the grey add-reaction smiley in the hover bar again, and no longer shows up on reactions under a message.
+- The result says which language it came from: *translated from French · hello*.
+
+**Fixed: ThemeMaker**
+- **Hide things** now really hides the gift, sticker and GIF buttons in the message box (Discord changed them, and "GIF" used to match "gift" too).
+- The Colours section is gone: colours come from **Settings › CSS › Menu style** now.
+
 ## 1.19.0
 **New: start-up log on the start-up screen**
 - A small console under the status text shows what is loading right now, three lines at a time with a blinking cursor: Twilight loading, the main window opening, discord.com loading, Twilight being injected (and its size), how many plugins started and how long they took, Discord's native modules (and the ones Slim Discord skips), and the moment Discord's connection is up.

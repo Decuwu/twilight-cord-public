@@ -245,6 +245,31 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
       if (body) req.write(body); req.end();
     } catch (e) { resolve({ error: String(e.message || e) }); }
   });
+  // Other translators (Translate page > Translator). DeepL needs your own free key (kept in Twilight's settings on this PC, sent only to
+  // DeepL). If DeepL fails, Google takes over so a click never comes back empty.
+  const DL_TO = { en: 'EN-GB', pt: 'PT-PT', 'zh-CN': 'ZH-HANS' };
+  const deeplHost = key => /:fx$/.test(key) ? 'api-free.deepl.com' : 'api.deepl.com';
+  const deepl = async (text, to, key) => {
+    if (!key) return { error: 'no DeepL key' };
+    const body = JSON.stringify({ text: [text], target_lang: DL_TO[to] || to.toUpperCase() });
+    const r = await httpsJson(`https://${deeplHost(key)}/v2/translate`, { method: 'POST', headers: { Authorization: 'DeepL-Auth-Key ' + key, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }, body });
+    const tr = r.json?.translations?.[0];
+    if (!tr) return { error: r.status === 403 ? 'DeepL key not accepted' : r.status === 456 ? 'DeepL monthly limit reached' : 'DeepL ' + (r.status || r.error) };
+    return { text: tr.text, from: String(tr.detected_source_language || '').toLowerCase() };
+  };
+  const deeplUsage = async key => {
+    if (!key) return { error: 'no key' };
+    const r = await httpsJson(`https://${deeplHost(key)}/v2/usage`, { headers: { Authorization: 'DeepL-Auth-Key ' + key } });
+    return r.json && 'character_count' in r.json ? { used: r.json.character_count, limit: r.json.character_limit } : { error: r.status === 403 ? 'key not accepted' : 'HTTP ' + (r.status || r.error) };
+  };
+  const translateWith = async (engine, text, to, key) => {
+    if (engine === 'deepl') {
+      const r = await deepl(text, to, key).catch(e => ({ error: String(e?.message || e) }));
+      if (!r.error) return { ...r, engine };
+      const g = await translate(text, to); return g.error ? { error: r.error } : { ...g, engine: 'google', fellBack: r.error };
+    }
+    return { ...(await translate(text, to)), engine: 'google' };
+  };
   const translate = async (text, to) => {
     const r = await httpsJson(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(to)}&dt=t&q=${encodeURIComponent(text)}`);
     if (!r.json) return { error: r.error || 'HTTP ' + r.status };
@@ -302,7 +327,8 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
       return { on: c.on, popouts: popouts.size };
     }
     if (c?.type === 'metrics') return metrics();
-    if (c?.type === 'translate' && typeof c.text === 'string' && c.text.length < 3000 && /^[\w-]{2,8}$/.test(c.to || '')) return translate(c.text, c.to);
+    if (c?.type === 'translate' && c.op === 'usage') return deeplUsage(c.key);
+    if (c?.type === 'translate' && typeof c.text === 'string' && c.text.length < 3000 && /^[\w-]{2,8}$/.test(c.to || '')) return translateWith(c.engine, c.text, c.to, c.key);
     // Reports the Probe plugin writes next to the mod (so Claude can read them from the folder). Fixed names only.
     if (c?.type === 'report' && /^[\w-]{1,40}\.(json|txt|log)$/.test(c.name) && typeof c.text === 'string' && c.text.length < 2e6) {
       const dir = path.join(__dirname, 'reports'); fs.mkdirSync(dir, { recursive: true });
@@ -329,13 +355,44 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
       const list = c.from ? parts.filter(e => cmp(e.version, c.from) > 0 && cmp(e.version, c.to || '999.0.0') <= 0) : parts.slice(0, Math.max(1, Math.min(10, c.count | 0 || 3)));
       return { entries: list.slice(0, 12).map(e => ({ version: e.version, body: e.body.slice(0, 8000) })), total: parts.length };
     }
+    // Coming soon (menu > Home): COMING_SOON.md from the GitHub repo, so everyone sees what the next update brings before it lands.
+    // Fetched at most every 30 minutes; the copy next to the mod is the fallback (offline, or a dev build not pushed yet).
+    if (c?.type === 'coming') {
+      const now = Date.now(); if (comingCache && now - comingCache.at < 1800000) return comingCache.r;
+      let text = null, from = null;
+      try { const { repo, branch = 'main', token } = json('config.json'); if (repo) { text = (await get(`https://api.github.com/repos/${repo}/contents/COMING_SOON.md?ref=${encodeURIComponent(branch)}`, token)).toString('utf8'); from = 'github'; } } catch {}
+      if (!text) { const local = read('COMING_SOON.md'); if (local) { text = local; from = 'local'; } }
+      const r = { text: text ? text.slice(0, 8000) : null, from }; comingCache = { at: now, r }; return r;
+    }
+    // Feedback (menu footer): reports go to the Twilight feedback channel through a Discord webhook, so nobody needs to sign in anywhere.
+    // Where to send comes from feedback.json in the public repo (so a spammed webhook can be swapped without a release), else the copy
+    // next to the mod. Only webhook URLs on discord.com are accepted, and the post can never ping anyone.
+    if (c?.type === 'feedback') {
+      const now = Date.now();
+      if (!fbCache || now - fbCache.at > 1800000) {
+        let cfg = null;
+        try { const r = await httpsJson('https://api.github.com/repos/Decuwu/twilight-cord-public/contents/feedback.json', { headers: { Accept: 'application/vnd.github.raw+json' } }); if (r.json?.hook) cfg = r.json; } catch {}
+        if (!cfg) { const l = json('feedback.json'); if (l?.hook) cfg = l; }
+        fbCache = { at: now, cfg };
+      }
+      const cfg = fbCache.cfg, ok = cfg && /^https:\/\/(?:ptb\.|canary\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[\w-]+$/.test(cfg.hook);
+      if (c.op === 'where') return { ok: !!ok, channel: cfg?.channel || null, guild: cfg?.guild || null };
+      if (c.op !== 'send' || !c.payload) return { ok: false, error: 'bad request' };
+      if (!ok) return { ok: false, error: 'Feedback is not set up yet' };
+      const p = c.payload, e = p.embeds?.[0] || {};
+      const body = JSON.stringify({ username: 'Twilight Feedback', allowed_mentions: { parse: [] },
+        embeds: [{ title: String(e.title || '').slice(0, 256), description: String(e.description || '').slice(0, 3500), color: e.color | 0, timestamp: new Date().toISOString(),
+          fields: (e.fields || []).slice(0, 5).map(f => ({ name: String(f.name).slice(0, 256), value: String(f.value || '-').slice(0, 1000), inline: !!f.inline })), footer: { text: 'Sent from the Twilight menu' } }] });
+      const r = await httpsJson(cfg.hook + '?wait=true', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }, body });
+      return r.status >= 200 && r.status < 300 ? { ok: true } : { ok: false, error: r.status === 429 ? 'Too many reports right now, try again in a minute' : 'Could not send (' + (r.status || r.error) + ')' };
+    }
     if (c?.type === 'boot' && typeof c.step === 'string') { boot(c.step); return { ok: true }; }
     if (c?.type === 'ready') { note(`page ready ${CHANNEL} v${json('manifest.json').version || '?'}`); return { ok: true }; }
     return null;
   });
 
   // ---- auto updater: pulls manifest.json + listed files from the (private) GitHub repo ----
-  const SAFE = /^(core\.js|debug\.js|twilight\.js|measure\.js|stock\.js|CHANGELOG\.md|plugins\/[\w-]+\.js|themes\/[\w-]+\.css)$/;
+  const SAFE = /^(core\.js|debug\.js|twilight\.js|measure\.js|stock\.js|CHANGELOG\.md|feedback\.json|plugins\/[\w-]+\.js|themes\/[\w-]+\.css)$/;
   // Versions: "1.19.0" is a release (on GitHub); "1.19.0.d3" is local dev build 3 of what will be released as 1.19.0.
   const isDev = v => /\.d\d*$/i.test(String(v || ''));
   const num = x => parseInt(x, 10) || 0; // "13-beta" counts as 13
@@ -344,6 +401,7 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
     for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
     return isDev(b) && !isDev(a); // a release beats the local dev builds of the same number (1.19.0 > 1.19.0.d3)
   };
+  let comingCache = null, fbCache = null;
   const get = (url, token) => new Promise((resolve, reject) => {
     const req = https.get(url, {
       headers: { 'User-Agent': 'twilight-cord', Accept: 'application/vnd.github.raw+json', ...(token && { Authorization: `Bearer ${token}` }) },

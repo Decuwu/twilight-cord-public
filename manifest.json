@@ -1,5 +1,5 @@
 {
-  "version": "1.19.0",
+  "version": "1.20.0",
   "files": [
     "core.js",
     "debug.js",
@@ -9,7 +9,6 @@
     "plugins/clonerTest.js",
     "plugins/emojiStealer.js",
     "plugins/friendNotifier.js",
-    "plugins/hello.js",
     "plugins/imageZoom.js",
     "plugins/messageLogger.js",
     "plugins/messageMenu.js",
@@ -20,7 +19,6 @@
     "plugins/roleDividers.js",
     "plugins/serverMute.js",
     "plugins/silentTyping.js",
-    "plugins/snippets.js",
     "plugins/staffTags.js",
     "plugins/tagCommands.js",
     "plugins/tags.js",
@@ -32,6 +30,7 @@
     "themes/midnight.css",
     "measure.js",
     "stock.js",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "feedback.json"
   ]
 }

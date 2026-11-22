@@ -20,6 +20,13 @@ Twilight.definePlugin({
     Twilight.ls.set('msglog', Twilight.ls.get('msglog', []).filter(x => this.keyOf(x) !== k));
     this.removeGhost(e.at, e.id);
   },
+  // Open the channel at the logged message (Discord loads the chat around that point in time, so deleted ones land in the right spot too).
+  jump(e) {
+    const T = Twilight, ch = T.findStore('ChannelStore')?.getChannel?.(e.channel);
+    if (!ch && !e.gid && e.guild !== 'DMs') return T.notify('MessageLogger', 'Can not open that channel any more (left the server or no access)', 3500, 'warn');
+    const path = `/channels/${e.gid || ch?.guild_id || '@me'}/${e.channel}/${e.id}`;
+    T.go(path);
+  },
   clearAll() { Twilight.ls.set('msglog', []); this.htmlSet({}); this.clearGhosts?.(); },
   options: [
     { key: 'ghost', label: 'Show deleted messages in chat', def: true },
@@ -29,32 +36,43 @@ Twilight.definePlugin({
     { key: 'ignoreOwn', label: 'Ignore my own messages', def: true },
     { key: 'ignoreBots', label: 'Ignore bots and webhooks (no log entry, no restored message)', def: true },
   ],
-  actions: [
-    { label: 'Clear message log', sub: 'MessageLogger', run() { Twilight.plugins.get('MessageLogger').clearAll(); Twilight.debug.refresh(); Twilight.notify('MessageLogger', 'Log cleared', 1800, 'info'); } },
-    { label: 'Hide restored (deleted and edited) messages in this view', sub: 'MessageLogger', run() { const m = Twilight.plugins.get('MessageLogger'); m.clearGhosts?.(); Twilight.notify('MessageLogger', 'Removed', 1800, 'info'); } },
-  ],
   tab: {
     name: 'Log',
     render() {
-      const { h } = Twilight, all = Twilight.ls.get('msglog', []);
+      const T = Twilight, { h } = T, all = T.ls.get('msglog', []), me = T.plugins.get('MessageLogger');
       // Filter by server: click servers to show only those (none selected = everything).
       const servers = [...new Set(all.map(e => e.guild || 'Unknown'))];
-      const picked = Twilight.ls.get('msglogfilter', []).filter(n => servers.includes(n));
-      const toggle = n => { Twilight.ls.set('msglogfilter', picked.includes(n) ? picked.filter(x => x !== n) : [...picked, n]); Twilight.debug.refresh(); };
-      const log = picked.length ? all.filter(e => picked.includes(e.guild || 'Unknown')) : all;
-      const nodes = [h('div', { className: 'twd-row', textContent: 'Clear log', onclick: () => { Twilight.plugins.get('MessageLogger').clearAll(); Twilight.debug.refresh(); } })];
+      const picked = T.ls.get('msglogfilter', []).filter(n => servers.includes(n));
+      const toggle = n => { T.ls.set('msglogfilter', picked.includes(n) ? picked.filter(x => x !== n) : [...picked, n]); T.debug.refresh(); };
+      const kind = T.ls.get('msglogkind', 'all'); // all | delete | edit
+      const log = all.filter(e => (!picked.length || picked.includes(e.guild || 'Unknown')) && (kind === 'all' || e.type === kind));
+      // Search filters the rows already on the page (no redraw, so the box keeps your cursor). Matches name, server, channel and text.
+      const rows = [], count = h('small', { className: 'twd-out' });
+      const search = T.ui.input('Search the log: name, server, channel or text', '');
+      const filter = () => { const q = search.value.trim().toLowerCase(); let n = 0; for (const [r, text] of rows) { const on = !q || text.includes(q); r.style.display = on ? '' : 'none'; n += on; } count.textContent = q ? `${n} of ${rows.length} match` : `${rows.length} logged${log.length < all.length ? ` (of ${all.length})` : ''}`; };
+      search.oninput = filter;
+      const nodes = [h('style', { textContent: '.twd-log.tw-jump{cursor:pointer;border-radius:4px}.twd-log.tw-jump:hover{background:var(--tw-hover,rgba(255,255,255,.05))}' }), T.ui.sec('Log'), search,
+        h('div', { className: 'twd-chips' }, ...[['all', 'All'], ['delete', 'Deleted'], ['edit', 'Edited']].map(([k, l]) => h('div', { className: 'twd-chip' + (kind === k ? ' on' : ''), textContent: l, onclick: () => { T.ls.set('msglogkind', k); T.debug.refresh(); } }))),
+      ];
       if (servers.length > 1) nodes.push(h('div', { className: 'twd-chips' },
-        h('div', { className: 'twd-chip' + (picked.length ? '' : ' on'), textContent: 'All servers', onclick: () => { Twilight.ls.set('msglogfilter', []); Twilight.debug.refresh(); } }),
+        h('div', { className: 'twd-chip' + (picked.length ? '' : ' on'), textContent: 'All servers', onclick: () => { T.ls.set('msglogfilter', []); T.debug.refresh(); } }),
         ...servers.map(n => h('div', { className: 'twd-chip' + (picked.includes(n) ? ' on' : ''), textContent: n, onclick: () => toggle(n) }))));
-      if (!log.length) nodes.push(h('div', { className: 'twd-out', textContent: all.length ? 'Nothing from the selected servers.' : 'Nothing logged yet. Deleted and edited messages will appear here.' }));
+      nodes.push(count);
+      if (!log.length) nodes.push(h('div', { className: 'twd-out', textContent: all.length ? 'Nothing matches the filters above.' : 'Nothing logged yet. Deleted and edited messages will appear here.' }));
       for (const e of log) {
         const when = new Date(e.at).toLocaleTimeString();
-        nodes.push(h('div', { className: 'twd-log ' + e.type },
+        const r = h('div', { className: 'twd-log tw-jump ' + e.type, title: 'Click to jump to this message', onclick: () => me.jump(e) },
           h('b', { textContent: `${e.type === 'delete' ? 'DELETED' : 'EDITED'} · ${e.author || 'unknown'} · ${e.guild ? e.guild + ' ' : ''}${e.where || e.channel} · ${when}  ` },
-            h('span', { textContent: '✕ remove', style: 'cursor:pointer;color:#ff8a94;margin-left:8px', onclick: () => { Twilight.plugins.get('MessageLogger').drop(e); Twilight.debug.refresh(); } })),
+            h('span', { textContent: '↗ jump', style: 'color:var(--tw-link,#00a8fc);margin-left:8px' }),
+            h('span', { textContent: '✕ remove', style: 'cursor:pointer;color:#ff8a94;margin-left:8px', onclick: ev => { ev.stopPropagation(); me.drop(e); T.debug.refresh(); } })),
           h('div', { textContent: e.content || '(no text)' }),
-          ...(e.type === 'edit' ? [h('div', { className: 'new', textContent: '→ ' + e.now })] : [])));
+          ...(e.type === 'edit' ? [h('div', { className: 'new', textContent: '→ ' + e.now })] : []));
+        rows.push([r, [e.author, e.guild, e.where, e.content, e.now].filter(Boolean).join(' ').toLowerCase()]); nodes.push(r);
       }
+      filter();
+      nodes.push(T.ui.sec('Clean up'),
+        T.ui.action('Hide restored messages in this view', () => { me.clearGhosts?.(); T.notify('MessageLogger', 'Removed from this view', 1800, 'info'); }, null, 'The red / yellow copies in the chat you have open; the log keeps them'),
+        T.ui.action('Clear the whole log', () => { me.clearAll(); T.debug.refresh(); T.notify('MessageLogger', 'Log cleared', 1800, 'info'); }, null, `Deletes all ${all.length} entries`));
       return nodes;
     },
   },
@@ -94,7 +112,7 @@ html.tw-nohl .tw-tag,.tw-ghost.tw-normal .tw-tag{display:none!important}`,
       if (opt('ignoreOwn', true) && old.authorId && old.authorId === me()) return;
       if (opt('ignoreBots', true) && old.bot) return;
       if (!old.content && type === 'delete') return;
-      const entry = { type, id: old.id, at, author: old.author, channel: old.channel, where: where(old.channel), guild: guildOf(old.channel), content: old.content.slice(0, 400), now: now?.slice(0, 400) };
+      const entry = { type, id: old.id, at, author: old.author, channel: old.channel, gid: Twilight.findStore('ChannelStore')?.getChannel?.(old.channel)?.guild_id || null, where: where(old.channel), guild: guildOf(old.channel), content: old.content.slice(0, 400), now: now?.slice(0, 400) };
       const all = [entry, ...Twilight.ls.get('msglog', [])], keep = all.slice(0, this.LIMIT);
       for (const x of all.slice(this.LIMIT)) this.removeGhost(x.at, x.id); // over the limit: the oldest entries go, and so do their messages
       Twilight.ls.set('msglog', keep);

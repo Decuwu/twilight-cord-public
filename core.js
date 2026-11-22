@@ -90,6 +90,7 @@
     try { window[CHUNK]?.push([[Symbol()], {}, r => { wreq ||= r; }]); } catch {}
   };
 
+  let navFn; // Discord's router function, found once (see go)
   const find = f => {
     grab();
     if (!wreq) return;
@@ -357,6 +358,38 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
     if (!domMO && document.body) { domMO = new _MO(() => { for (const x of domFns) x.kick(); }); domMO.observe(document.body, { childList: true, subtree: true }); }
     return () => { clearTimeout(w.t); domFns.delete(w); if (!domFns.size && domMO) { domMO.disconnect(); domMO = null; } };
   };
+  // ---- chat-bar buttons: small toggles in the message box, left of Discord's GIF button (SilentTyping, Translate my messages...) ----
+  // A plugin calls chatButton({ id, label, icon (svg), on: () => bool, tag: () => short text, click }) and gets back a remove function.
+  // The shared page watcher puts them back whenever Discord redraws the box; each pass only checks what is there.
+  const chatBtns = new Map(); let chatStop = null;
+  const paintChat = () => {
+    if (!chatBtns.size) return;
+    for (const bar of document.querySelectorAll('[class*="channelTextArea_"] [class*="buttons_"]')) {
+      const model = [...bar.children].find(c => !c.dataset.twCb && c.querySelector('[role="button"]')); if (!model) continue;
+      let first = [...bar.children].find(c => !c.dataset.twCb) || null;
+      for (const d of chatBtns.values()) {
+        let w = bar.querySelector(`:scope > [data-tw-cb="${d.id}"]`);
+        if (!w) {
+          w = document.createElement('div'); w.className = model.className; w.dataset.twCb = d.id;
+          const b = document.createElement('div'), inner = model.querySelector('[role="button"]');
+          b.className = (inner?.className || '') + ' tw-cb'; b.setAttribute('role', 'button'); b.tabIndex = 0; b.innerHTML = d.icon + '<span class="tw-cb-tag"></span>';
+          b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); try { d.click(e); } catch (x) { console.warn('[twilight] chat button', d.id, x); } paintChat(); }, true);
+          b.addEventListener('contextmenu', e => { if (!d.menu) return; e.preventDefault(); e.stopPropagation(); try { d.menu(e); } catch {} }, true);
+          w.append(b); bar.insertBefore(w, first);
+        }
+        const b = w.firstChild, on = !!d.on?.(), tag = d.tag?.() || '', label = typeof d.label === 'function' ? d.label() : d.label;
+        b.classList.toggle('on', on); b.setAttribute('aria-label', label); b.setAttribute('aria-pressed', String(on)); if (b.title !== label) b.title = label;
+        const t = b.querySelector('.tw-cb-tag'); if (t.textContent !== tag) t.textContent = tag;
+      }
+    }
+  };
+  const chatCss = () => { if (document.getElementById('tw-cbcss')) return; const st = document.createElement('style'); st.id = 'tw-cbcss';
+    st.textContent = '.tw-cb{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--interactive-normal)}.tw-cb:hover{color:var(--interactive-hover)}.tw-cb svg{width:20px;height:20px;fill:currentColor}.tw-cb.on{color:var(--brand-500,#5865f2)}.tw-cb:not(.on) svg{opacity:.75}.tw-cb-tag{position:absolute;right:-3px;bottom:-1px;padding:0 3px;border-radius:4px;background:var(--brand-500,#5865f2);color:#fff;font:700 9px/12px "gg sans","Segoe UI",sans-serif;pointer-events:none}.tw-cb-tag:empty{display:none}.tw-cb:not(.on) .tw-cb-tag{background:var(--background-mod-strong,#4e5058)}';
+    document.documentElement.append(st); };
+  const chatButton = d => {
+    chatCss(); chatBtns.set(d.id, d); chatStop ||= domWatch(paintChat, 400); paintChat();
+    return () => { chatBtns.delete(d.id); document.querySelectorAll(`[data-tw-cb="${d.id}"]`).forEach(x => x.remove()); if (!chatBtns.size && chatStop) { chatStop(); chatStop = null; } };
+  };
   // ---- message scanner: one shared, throttled look at the chat for every plugin that decorates messages ----
   const scanners = new Map(), seenBy = new WeakMap(); let scanStop, scanT;
   const msgInfo = li => { const m = /^chat-messages-(\d+)-(\d+)$/.exec(li?.id || ''); return m ? { channelId: m[1], id: m[2], msg: findStore('MessageStore')?.getMessage?.(m[1], m[2]) } : null; };
@@ -447,6 +480,7 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
     // Native slash commands: a plugin adds { name, id, desc, opts:[{name,description,required,max_length}], run(values) }; the Tag commands plugin shows them in Discord's command list.
     slash: { cmds: new Map(), add(d) { this.cmds.set(d.name, d); this.onChange?.(); }, remove(n) { this.cmds.delete(n); this.onChange?.(); } }, // chat commands: name -> { help, run(args, channelId) }
     find, findAll,
+    chatButton, refreshChatButtons: () => paintChat(),
     wreq: () => (grab(), wreq), // Discord's main webpack require (module sources in .m), for finding patch targets
     notify,
     ls, isOff, setOff, findStore,
@@ -458,6 +492,15 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
     setOpt: (plugin, key, v) => { ls.set(`opt:${plugin}:${key}`, v); window.dispatchEvent(new CustomEvent('tw-opt', { detail: { plugin, key } })); },
     net: { add: (h, name = cur) => { initNet(); const w = name ? timed(name, h) : h; netW.set(h, w); netHooks.add(w); }, remove: h => { netHooks.delete(netW.get(h) || h); netW.delete(h); } },
     findByProps: (...p) => find(m => (typeof m === 'object' || typeof m === 'function') && p.every(k => k in m)),
+    // Open a Discord page, e.g. go('/channels/<server>/<channel>/<message>'). Uses Discord's own router (found by what it logs, since
+    // its export name changes between builds); falls back to a plain history change Discord also listens to.
+    go(path) {
+      try {
+        navFn ||= find(x => typeof x === 'function' && /Transitioning to/.test(Function.prototype.toString.call(x))) || find(m => typeof m?.transitionTo === 'function')?.transitionTo;
+        if (navFn) return navFn(path);
+      } catch (e) { console.warn('[twilight] go', e); }
+      history.pushState({}, '', path); window.dispatchEvent(new PopStateEvent('popstate'));
+    },
     // Really sends a message (bridge, agent). Pressing Enter with fake key events does NOT send; Discord's own sendMessage does.
     // Shows a small local note in the chat afterwards (only you see it) unless opts.quiet.
     async send(channelId, text, opts = {}) {
@@ -465,8 +508,8 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
       if (!/^\d{5,25}$/.test(channelId) || !text.trim() || text.length > 2000) return { error: 'bad channel or text' };
       const has = (...k) => find(x => (typeof x === 'object' || typeof x === 'function') && k.every(y => y in x)), m = sendMod ||= has('sendMessage', 'receiveMessage') || has('sendMessage');
       if (!m) return { error: 'no sendMessage module' };
-      try { await m.sendMessage(channelId, { content: text, tts: false, invalidEmojis: [], validNonShortcutEmojis: [] }, undefined, {}); }
-      catch (e) { return { error: String(e?.message || e).slice(0, 100) }; }
+      try { window.Twilight._ownSend = true; await m.sendMessage(channelId, { content: text, tts: false, invalidEmojis: [], validNonShortcutEmojis: [] }, undefined, {}); }
+      catch (e) { return { error: String(e?.message || e).slice(0, 100) }; } finally { window.Twilight._ownSend = false; }
       if (!opts.quiet) try { plugins.get('Assistant')?.say?.(channelId, '*Sent:* ' + text.slice(0, 200)); } catch {}
       return { ok: true };
     },

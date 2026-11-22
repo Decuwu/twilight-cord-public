@@ -53,7 +53,7 @@ Twilight.definePlugin({
     await t('fn:unignoreUser', () => !!T.findByProps('unignoreUser'));
     await t('fn:removeRelationship', () => !!T.findByProps('removeRelationship'));
     await t('fn:openUserProfileModal', () => !!T.findByProps('openUserProfileModal'));
-    await t('fn:transitionTo', () => !!T.findByProps('transitionTo'));
+    await t('fn:go', () => !!T.find(x => typeof x === 'function' && /Transitioning to/.test(Function.prototype.toString.call(x))));
     await t('store:PresenceStore', () => !!T.findStore('PresenceStore'));
     await t('store:VoiceStateStore', () => !!T.findStore('VoiceStateStore'));
     await t('messageStore.getMessages', () => typeof T.findStore('MessageStore')?.getMessages === 'function');

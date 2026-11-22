@@ -2,7 +2,7 @@
 Twilight.definePlugin({
   name: 'ClearNotifications',
   vs: "Only one-by-one 'mark as read' per server or channel",
-  desc: 'Tools tab: mark every server and DM as read',
+  desc: 'Mark every server and DM as read (Discord › Servers)',
   actionOnly: true,
   actions: [
     { label: 'Mark everything as read', run() { Twilight.plugins.get('ClearNotifications').ack(null); } },
