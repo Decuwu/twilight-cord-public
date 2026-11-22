@@ -1,0 +1,31 @@
+# Builds twilight-cord-launcher.exe and attaches it to a GitHub Release.
+# Run it from the Actions tab (Run workflow) or push a tag like v1.21.0. The version comes from manifest.json.
+name: release
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm install -g @yao-pkg/pkg
+      - run: npm run build
+      - name: Create or update the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=$(node -p "require('./manifest.json').version")
+          awk -v v="$V" '$0=="## " v {f=1; next} /^## /{if(f)exit} f' CHANGELOG.md > notes.md
+          printf '\n**Install:** download `twilight-cord-launcher.exe` below, close Discord, run it. Windows may warn because the exe is unsigned (More info, then Run anyway).\n' >> notes.md
+          if gh release view "v$V" >/dev/null 2>&1; then
+            gh release upload "v$V" dist/twilight-cord-launcher.exe --clobber
+          else
+            gh release create "v$V" dist/twilight-cord-launcher.exe --target "$GITHUB_SHA" --title "Twilight-Cord $V" --notes-file notes.md
+          fi
