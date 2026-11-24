@@ -1,4 +1,6 @@
 # Coming soon
 
 ## Next update
-Nothing announced yet. 1.23.0 just shipped: see What's new.
+- **AutoCollapse**: fold long walls of text to a few lines with "Show more" (off until you switch it on).
+- **Edit history**: see every version of an edited message, from the right-click menu or the yellow "edited" tag.
+- Lighter platform icons, and a quest completer that survives Discord updates.
