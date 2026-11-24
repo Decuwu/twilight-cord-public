@@ -14,11 +14,7 @@ opacity:var(--tw-op,1);border:1px solid rgba(255,255,255,.16);border-radius:var(
 color:#ecf6ff;font:13px "Segoe UI",sans-serif}
 #twd.open{display:flex;animation:twd-in .18s ease-out}
 @keyframes twd-in{from{opacity:0;transform:translateX(-14px)}}
-.twd-hd{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;user-select:none;background:linear-gradient(90deg,rgba(30,90,168,.82),rgba(108,200,255,.78) 55%,rgba(185,236,255,.78))}
-.twd-hd b{font:italic 900 16px "Arial Black",Impact,sans-serif;letter-spacing:.16em;text-transform:uppercase;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.35)}
-.twd-hd small{margin-left:10px;font:700 10px "Segoe UI",sans-serif;letter-spacing:.2em;color:rgba(255,255,255,.8)}
 .twd-x{cursor:pointer;color:#fff;opacity:.8;padding:0 4px;margin-left:6px}.twd-x:hover{opacity:1}
-.twd-btns{display:flex;align-items:center}
 .twd-rz{position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:nwse-resize;z-index:2;
 background:linear-gradient(135deg,transparent 50%,rgba(255,255,255,.55) 50%,rgba(255,255,255,.55) 58%,transparent 58%,transparent 70%,rgba(255,255,255,.55) 70%,rgba(255,255,255,.55) 78%,transparent 78%)}
 .twd .twd-sl{display:grid;grid-template-columns:128px 1fr 56px;gap:10px;align-items:center;padding:7px 12px;margin-bottom:4px;background:rgba(255,255,255,.045);
@@ -39,11 +35,9 @@ border-left:3px solid transparent;cursor:pointer;font:600 12px "Segoe UI",sans-s
 .twd-row small{display:block;margin-top:2px;font:500 11px "Segoe UI",sans-serif;letter-spacing:.02em;text-transform:none;color:#93afc8}
 .twd-row.info{cursor:default}.twd-row.info:hover{background:rgba(255,255,255,.045);border-left-color:transparent}
 .twd-row.sub{margin-left:18px;padding:6px 12px;opacity:.9}
-.twd-st{display:flex;align-items:center;gap:8px;font:800 10px "Segoe UI",sans-serif;letter-spacing:.12em}
 .twd-led{width:11px;height:11px;border-radius:50%;display:inline-block}
 .twd-led.on{background:#3ddc84;box-shadow:0 0 9px 2px rgba(61,220,132,.75)}
 .twd-led.off{background:#ff4d5e;box-shadow:0 0 7px 1px rgba(255,77,94,.55)}
-.twd-st.on{color:#3ddc84}.twd-st.off{color:#ff4d5e}
 .twd-led.info{background:#6cc8ff;box-shadow:0 0 8px 1px rgba(108,200,255,.7)}
 .twd-led.success{background:#3ddc84;box-shadow:0 0 8px 1px rgba(61,220,132,.7)}
 .twd-led.warn{background:#fbbf24;box-shadow:0 0 8px 1px rgba(251,191,36,.7)}
@@ -64,17 +58,7 @@ font:11px/1.45 Consolas,monospace;white-space:pre-wrap;word-break:break-word}
 .twd-ln{margin-bottom:2px;color:#d2e6f5}.twd-ln.error{color:#ff6b7a}.twd-ln.warn{color:#fbbf24}.twd-ln.input{color:#7f9bb5}.twd-ln.result{color:#3ddc84}
 .twd-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
 .twd-chip{padding:5px 11px;background:rgba(255,255,255,.06);cursor:pointer;font:700 10px "Segoe UI",sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#a9c4db}
-.twd-chip:hover{background:rgba(108,200,255,.3)}.twd-chip.on{background:#6cc8ff;color:#fff}
-.twd-set{margin:2px 8px;padding:6px 10px;border-radius:4px;cursor:pointer;font:500 16px "gg sans","Segoe UI",sans-serif;color:#b9ecff;display:flex;align-items:center;gap:8px}
-.twd-set:hover{background:rgba(108,200,255,.16);color:#fff}
-.twd-set i{width:8px;height:8px;border-radius:50%;background:#6cc8ff;box-shadow:0 0 8px 2px rgba(108,200,255,.7)}
-.twd-seth{margin:14px 18px 4px;font:700 12px "gg sans","Segoe UI",sans-serif;letter-spacing:.04em;text-transform:uppercase;color:#7f9bb5}
-.twd-add{margin-left:10px;padding:0 14px 0 12px;height:24px;border-radius:6px;display:inline-flex;align-items:center;gap:7px;white-space:nowrap;cursor:pointer;user-select:none;
-color:#fff;font:600 13px/24px "gg sans","Segoe UI",sans-serif;letter-spacing:.02em;background:linear-gradient(135deg,#1e5aa8,#6cc8ff 55%,#b9ecff);
-box-shadow:0 0 0 1px rgba(255,255,255,.22) inset,0 2px 12px rgba(108,200,255,.45);transition:transform .15s,box-shadow .15s,filter .15s}
-.twd-add:hover{transform:translateY(-1px);filter:brightness(1.12);box-shadow:0 0 0 1px rgba(255,255,255,.35) inset,0 4px 18px rgba(185,236,255,.55)}
-.twd-add:active{transform:none}
-.twd-add i{width:8px;height:8px;border-radius:50%;background:#fff;box-shadow:0 0 8px 2px rgba(255,255,255,.8)}`;
+.twd-chip:hover{background:rgba(108,200,255,.3)}.twd-chip.on{background:#6cc8ff;color:#fff}`;
 
   const POPCSS = `#twp{position:fixed;display:flex;flex-direction:column;min-width:380px;border-radius:var(--tw-rad,8px);overflow:hidden;font:16px "gg sans","Segoe UI",sans-serif;user-select:none;color:var(--tw-text);background:var(--tw-bg);box-shadow:0 0 0 1px var(--tw-line),var(--elevation-high,0 8px 16px rgba(0,0,0,.24))}
 #twp[data-min]{height:48px!important;min-width:0}#twp[data-min] .twp-body,#twp[data-min] .twd-rz{display:none}
@@ -90,7 +74,10 @@ box-shadow:0 0 0 1px rgba(255,255,255,.22) inset,0 2px 12px rgba(108,200,255,.45
 .twp-t{padding:3px 12px;border-radius:4px;cursor:pointer;font:600 13px "gg sans","Segoe UI",sans-serif;color:var(--tw-muted);flex:0 1 auto;min-width:2.2em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center}.twp-t:hover{color:var(--tw-head)}.twp-t.on{background:var(--tw-brand);color:#fff}
 .twp-b{cursor:pointer;color:var(--tw-muted);padding:4px 8px;border-radius:4px;font-size:16px;line-height:1}.twp-b:hover{background:var(--tw-hover);color:var(--tw-head)}
 .twp-body{position:relative;flex:1;min-height:0}
-html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}`;
+html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+#twp .twd-rz{position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:nwse-resize;z-index:2;
+background:linear-gradient(135deg,transparent 50%,rgba(255,255,255,.55) 50%,rgba(255,255,255,.55) 58%,transparent 58%,transparent 70%,rgba(255,255,255,.55) 70%,rgba(255,255,255,.55) 78%,transparent 78%)}
+.twp-logo{width:22px;height:22px;border-radius:50%;object-fit:cover;flex:none}`;
 
   let side, body, content, searchIn, footer;
   const input = (placeholder, value = '') => h('input', { placeholder, value });
@@ -167,7 +154,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
       const acts = pluginActs().filter(([p]) => groupOf(p) !== 'Servers' && !PLACE_OWN_PAGE.has(p.name)), on = [...T.plugins.values()].filter(p => !T.isOff(p.name) && !isDevPlugin(p) && !p.hidden).length;
       const recent = T.ls.get('menuRecent', []).filter(([t, k]) => SUBS[t]?.includes(k) && !(t === 'Home')).slice(0, 6);
       return [
-        h('div', { className: 'twd-hero' }, h('b', { textContent: 'Twilight' }), h('span', { textContent: `v${T.debug.version || '?'} · ${on} plugins on${T.lite() ? ' · lightweight mode' : ''}${T.debug.safe ? ' · SAFE MODE' : ''}` })),
+        h('div', { className: 'twd-hero' }, h('b', {}, ...(T.brand().logo ? [h('img', { src: T.brand().logo, style: 'width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:-4px;margin-right:8px' })] : []), T.brand().name), h('span', { textContent: `v${T.debug.version || '?'} · ${on} plugins on${T.lite() ? ' · lightweight mode' : ''}${T.debug.safe ? ' · SAFE MODE' : ''}` })),
         action("What's new", () => showWhatsNew(null, false), null, 'The changes in the last few Twilight updates'),
         ...comingNodes(),
         ...(recent.length ? [sec('Jump back in'), h('div', { className: 'twd-chips' }, ...recent.map(([t, k]) => h('div', { className: 'twd-chip', textContent: k, onclick: () => { goto(t, k); body.scrollTop = 0; render(); } })))] : []),
@@ -188,13 +175,12 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
         ...(T.ls.get('menuKey') ? [action('Reset menu key', () => { T.ls.set('menuKey', null); T.debug.key = T.debug.cfgKey; render(); }, null, 'Back to ' + keyName(T.debug.cfgKey))] : []),
         sec('Window'),
         action('Reset menu position and size', resetMenu),
-        slider('Corner radius', 0, 28, 1, fx().rad, v => v + 'px', v => setFx('rad', v)),
         sec('Sidebar order'),
         h('small', { className: 'twd-out', textContent: 'Drag a page in the sidebar to move it inside its group. Drag a group heading (or Home) to move the whole group.' }),
         action('Show the welcome tip again', () => { T.welcome?.show?.(); toggle(false); }, null, 'The "click me" arrow at the Twilight label and the menu key'),
         action('Reset sidebar order', () => { T.ls.set('menuOrder', {}); render(); T.notify('Twilight', 'Sidebar back to the default order', 2000, 'info'); }),
         sec('Look'),
-        action('Change the colours: Settings › CSS › Menu style', () => { goto('Settings', 'CSS'); body.scrollTop = 0; render(); }, null, 'Menu styles and your own menu CSS'),
+        action('Name, logo and colours: Make it your own', () => { goto('Make it your own', 'Name & logo'); body.scrollTop = 0; render(); }, null, 'Your own name and logo, menu style, accent colour, corners'),
       ];
     },
     Servers() {
@@ -209,7 +195,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     },
     Performance() {
       return [
-        action(T.lite() ? 'Ultra lightweight mode: ON (click to turn off)' : 'Ultra lightweight mode: off (click to turn on)', () => { T.setLite(!T.lite()); T.notify('Lightweight mode', T.lite() ? 'On: heavy plugins paused, blur off' : 'Off', 2500, 'info'); }, null, 'Pauses heavy plugins, removes blur, stops the shader'),
+        action(T.lite() ? 'Ultra lightweight mode: ON (click to turn off)' : 'Ultra lightweight mode: off (click to turn on)', () => { T.setLite(!T.lite()); T.notify('Lightweight mode', T.lite() ? 'On: heavy plugins paused, blur off' : 'Off', 2500, 'info'); }, null, 'Pauses the heavy plugins (PlatformIndicators, StaffTags, QuestCompleter) and the blur behind pop-ups'),
         sec('Slim Discord (applies after a restart)'),
         ...(() => {
           const st = T.debug.slim;
@@ -226,6 +212,49 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
         })(),
       ];
     },
+    'Name & logo'() {
+      const b = T.brand(), raw = T.ls.get('brand', null) || {}, save = v => { T.ls.set('brand', { ...(T.ls.get('brand', null) || {}), ...v }); applyBrand(); };
+      const name = input('Name (empty = Twilight)', raw.name || ''); name.maxLength = 24;
+      let nt = 0; name.oninput = () => { clearTimeout(nt); nt = setTimeout(() => save({ name: name.value.trim() }), 400); };
+      const pick = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp', style: 'display:none' });
+      pick.onchange = () => { const f = pick.files?.[0]; if (!f) return; squareLogo(f).then(url => { save({ logo: url }); T.notify(T.brand().name, 'Logo saved', 2000, 'success'); render(); }, e => T.notify('Logo', String(e.message || e), 3500, 'warn')); };
+      const ch = { ptb: 'PTB', stable: 'Stable', canary: 'Canary' }[String(window.GLOBAL_ENV?.RELEASE_CHANNEL || '').toLowerCase()] || 'Stable';
+      return [
+        h('div', { className: 'twd-out', textContent: 'Your own name and logo for everything ' + b.name + ' shows: the label at the top, this window, the Home banner, right-click menus, Discord\'s settings sidebar, the start-up screen and popup, and the app name of /tag, /petpet and /translate. Discord itself is never renamed.' }),
+        sec('Name'), name,
+        h('div', { className: 'twd-hero' }, h('b', {}, ...(b.logo ? [h('img', { src: b.logo, style: 'width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:-4px;margin-right:8px' })] : []), b.name), h('span', { textContent: 'Top label: ' + b.name + (b.channel ? '-' + ch : '') })),
+        ledRow('Show which Discord in the top label', b.channel, () => save({ channel: !b.channel }), b.name + '-' + ch + ' instead of just ' + b.name, 'sub'),
+        sec('Logo'),
+        action(b.logo ? 'Choose a different logo…' : 'Choose a logo…', () => pick.click(), null, 'PNG, JPG, GIF or WebP. Cropped to a square and made small (128 px), so it stays light'), pick,
+        ...(b.logo ? [action('Back to the moon', () => { save({ logo: null }); render(); }, null, 'The default logo')] : []),
+        action('Use it on the start-up screen too', async () => { const r = await T.cmd({ type: 'splash', set: { logo: b.logo ? 'brand' : 'moon' } }, 8000); T.notify('Start-up screen', r && r.ok !== false ? 'Saved: you will see it the next time Discord starts' : 'Could not save', 2500, r && r.ok !== false ? 'info' : 'error'); T.debug.splash = null; }, null, b.logo ? 'The small "Starting…" window shows your logo and name' : 'Pick a logo first; for now it shows the moon'),
+        sec('Applies'),
+        h('div', { className: 'twd-out', textContent: 'Straight away: the top label, this window, menus and lists. After Ctrl+R: the command list app name. Next Discord start: the start-up screen.' }),
+        action('Reset name, logo and accent', () => { T.ls.set('brand', null); applyBrand(); render(); T.notify('Twilight', 'Back to the original look', 2000, 'info'); }),
+      ];
+    },
+    Colours() {
+      const b = T.brand(), save = v => { T.ls.set('brand', { ...(T.ls.get('brand', null) || {}), ...v }); applyBrand(); };
+      const col = h('input', { type: 'color', value: b.accent || themeVars().brand || '#5865f2', style: 'height:34px;padding:2px 4px;cursor:pointer' });
+      let ct = 0; col.oninput = () => { clearTimeout(ct); ct = setTimeout(() => save({ accent: col.value }), 120); };
+      return [
+        sec('Menu style'),
+        sec('Menu style'),
+        ...Object.keys(MENU_STYLES).map(n => { const cur = T.ls.get('menuStyle', 'Discord') === n, c = MENU_STYLES[n] || { bg: '#313338', side: '#2b2d31', brand: '#5865f2' };
+          return h('div', { className: 'twd-row', title: 'Click to use this style', onclick: () => { T.ls.set('menuStyle', n); applyMenuStyle(); popup.sync(); render(); } },
+            h('span', {}, n, h('small', { textContent: cur ? 'In use' : STYLE_NOTE[n] })),
+            h('span', { style: 'display:flex;gap:3px;flex:none' }, ...[c.bg, c.side, c.brand].map(x => h('i', { style: `width:14px;height:14px;border-radius:50%;background:${x};box-shadow:0 0 0 1px var(--tw-line)` })))); }),
+        ledRow('Also colour Discord itself', T.ls.get('menuStyleDiscord', true), () => { T.ls.set('menuStyleDiscord', !T.ls.get('menuStyleDiscord', true)); applyMenuStyle(); render(); }, '', 'sub'),
+        ledRow('Clean mic, headphone and settings buttons', T.ls.get('cleanPanelButtons', true), () => { T.ls.set('cleanPanelButtons', !T.ls.get('cleanPanelButtons', true)); applyPanelButtons(); render(); }, 'Plain icons with a round glow, red when muted', 'sub'),
+        sec('Accent colour'),
+        h('div', { className: 'twd-out', textContent: 'Lit switches, the open page, header tabs and buttons in this window. ' + (b.accent ? 'Now: ' + b.accent : 'Now: the menu style\'s own') }),
+        col,
+        ...(b.accent ? [action('Use the menu style\'s own accent', () => { save({ accent: null }); render(); })] : []),
+        sec('Shape'),
+        slider('Corner radius', 0, 28, 1, fx().rad, v => v + 'px', v => setFx('rad', v)),
+        action('Your own CSS for this window: Settings › CSS', () => { goto('Settings', 'CSS'); body.scrollTop = 0; render(); }, null, 'Menu CSS restyles this window; Quick CSS restyles Discord'),
+      ];
+    },
     'Start-up'() {
       return [
         sec('Start-up screen (the small "Starting…" window)'),
@@ -233,12 +262,12 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
           const sp = T.debug.splash;
           if (!sp) { T.cmd({ type: 'splash' }).then(r => { if (r) { T.debug.splash = r; T.debug.refresh(); } }); return [h('div', { className: 'twd-out', textContent: 'Loading…' })]; }
           const save = async (set, image) => { const r = await T.cmd({ type: 'splash', set, image }, 15000); if (r && r.ok !== false) { T.debug.splash = r; T.notify('Start-up screen', 'Saved: you will see it the next time Discord starts', 2500, 'info'); } else T.notify('Start-up screen', r?.error || 'Could not save', 4000, 'error'); T.debug.refresh(); };
-          const LOGO = { moon: 'Twilight moon', discord: "Discord's own animation", custom: 'Your picture' }, order = ['moon', 'discord', ...(sp.hasImage ? ['custom'] : [])];
+          const LOGO = { moon: 'Twilight moon', discord: "Discord's own animation", custom: 'Your picture', brand: 'Your logo (Make it your own)' }, order = ['moon', 'discord', ...(sp.hasImage ? ['custom'] : []), ...(T.brand().logo ? ['brand'] : [])];
           const pick = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/gif,image/webp', style: 'display:none' });
           pick.onchange = () => { const f = pick.files?.[0]; if (!f) return; if (f.size > 8 * 1048576) return T.notify('Start-up screen', 'Pictures up to 8 MB', 3500, 'warn'); const rd = new FileReader(); rd.onload = () => save(null, rd.result); rd.readAsDataURL(f); };
           const text = input('Your own status text (empty = Discord\'s "Starting…")', sp.text || ''); text.maxLength = 60;
           return [
-            ledRow('Twilight start-up screen', sp.on, () => save({ on: !sp.on }), 'Midnight colours, stars and a Twilight label instead of Discord\'s grey window'),
+            ledRow(T.brand().name + ' start-up screen', sp.on, () => save({ on: !sp.on }), 'Midnight colours, stars and a Twilight label instead of Discord\'s grey window'),
             ...(sp.on ? [
               ledRow('Show what is loading', sp.log !== false, () => save({ log: sp.log === false }), 'A small console line under the status text: modules, the window, plugins'),
               action('Logo: ' + LOGO[sp.logo === 'custom' && !sp.hasImage ? 'moon' : sp.logo], () => save({ logo: order[(order.indexOf(sp.logo) + 1) % order.length] }), null, 'Click to change'),
@@ -254,7 +283,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
           t.oninput = () => s('title', t.value); m.oninput = () => s('msg', m.value);
           return h('div', {},
             ledRow('Show it when Discord starts', g().on, () => { s('on', !g().on); T.debug.refresh(); }),
-            t, m, h('small', { className: 'twd-out', textContent: 'Fills in: {version} {plugins} {time}' }),
+            t, m, h('small', { className: 'twd-out', textContent: 'Fills in: {name} {version} {plugins} {time}' }),
             slider('Stays for', 1, 10, .5, g().ms / 1000, v => v + 's', v => s('ms', v * 1000)),
             action('Colour: ' + g().type, () => { const o = ['info', 'success', 'warn', 'error']; s('type', o[(o.indexOf(g().type) + 1) % 4]); T.debug.refresh(); }, g().type),
             action('Preview', () => T.startupPopup(T.debug.version, true)),
@@ -269,13 +298,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
       const mta = h('textarea', { value: T.ls.get('menuCss', ''), placeholder: '/* Menu CSS: restyle this Twilight window, e.g. .twd-tab.on { color: hotpink } */', spellcheck: false });
       mta.oninput = () => { T.ls.set('menuCss', mta.value); applyMenuCss(); };
       return [
-        sec('Menu style'),
-        ...Object.keys(MENU_STYLES).map(n => { const cur = T.ls.get('menuStyle', 'Discord') === n, c = MENU_STYLES[n] || { bg: '#313338', side: '#2b2d31', brand: '#5865f2' };
-          return h('div', { className: 'twd-row', title: 'Click to use this style', onclick: () => { T.ls.set('menuStyle', n); applyMenuStyle(); popup.sync(); render(); } },
-            h('span', {}, n, h('small', { textContent: cur ? 'In use' : STYLE_NOTE[n] })),
-            h('span', { style: 'display:flex;gap:3px;flex:none' }, ...[c.bg, c.side, c.brand].map(x => h('i', { style: `width:14px;height:14px;border-radius:50%;background:${x};box-shadow:0 0 0 1px var(--tw-line)` })))); }),
-        ledRow('Also colour Discord itself', T.ls.get('menuStyleDiscord', true), () => { T.ls.set('menuStyleDiscord', !T.ls.get('menuStyleDiscord', true)); applyMenuStyle(); render(); }, '', 'sub'),
-        ledRow('Clean mic, headphone and settings buttons', T.ls.get('cleanPanelButtons', true), () => { T.ls.set('cleanPanelButtons', !T.ls.get('cleanPanelButtons', true)); applyPanelButtons(); render(); }, 'Plain icons with a round glow, red when muted', 'sub'),
+        action('Menu style and accent colour: Make it your own › Colours', () => { goto('Make it your own', 'Colours'); body.scrollTop = 0; render(); }, null, 'Discord, Dusk, Midnight, Paper, Rose, Ember'),
         sec('Menu CSS'), mta,
         h('small', { className: 'twd-out', textContent: 'Styles this Twilight window only. Handy names: --tw-brand --tw-bg --tw-side --tw-head --tw-text --tw-muted (colours), .twd-side (sidebar), .twd-tab (sidebar item), .twd-row (a row), .twd-sec (section heading), .twd-hero (Home banner), .twp-hd (window header), .twp-t (header tab).' }),
         h('div', { className: 'twd-2' }, action('Clear', () => { mta.value = ''; mta.oninput(); }), action('Example', () => { mta.value = '/* rounder, roomier menu with a glow on the open page */\n.twd-row { border-radius: 8px; margin: 2px 0; }\n.twd-tab.on { box-shadow: inset 3px 0 0 var(--tw-brand); }\n.twp-hd { background: color-mix(in srgb, var(--tw-brand) 25%, var(--tw-side)); }'; mta.oninput(); })),
@@ -312,8 +335,9 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
   const SUBS = {
     Home: ['Home'],
     Local: ['Self', 'Privacy', 'Channel', 'Message log'],
-    Discord: ['Servers', 'Translate', 'Performance', 'Start-up', 'Tools'],
-    Settings: ['CSS', 'Menu', 'Notifications',
+    Discord: ['Servers', 'Translate', 'Performance', 'Tools'],
+    'Make it your own': ['Name & logo', 'Colours', 'Start-up', 'Notifications'],
+    Settings: ['CSS', 'Menu',
       'Plugins'] };
   const NAME = { Notifications: 'Notify' };
   // Pages that open from the header instead of the sidebar: [header tab, how to draw it]. Only shown when the plugin is there.
@@ -352,7 +376,10 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     const k = s || nav[t]; if (t !== 'Home' && k) T.ls.set('menuRecent', [[t, k], ...T.ls.get('menuRecent', []).filter(([a, b]) => a !== t || b !== k)].slice(0, 8)); // Home > Jump back in
   };
   const placeOf = p => p.place || PLACE[p.name];
-  const flipPlugin = p => {
+  const flipPlugin = async p => {
+    if (p.lazy && T.isOff(p.name)) { // its code was left out of start-up while it was off (1.23.0): fetch it now
+      try { p = await T.loadPlugin(p.name); } catch (e) { T.notify(p.name + ' failed', String(e.message || e).slice(0, 70), 5000, 'error'); return; }
+    }
     const turnOn = T.isOff(p.name);
     try {
       turnOn ? p.start?.() : p.stop?.();
@@ -400,7 +427,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
       }
       add(k === 'Friends' ? 'Friends' : k === 'Servers' || k === 'Tools' || k === 'Translate' ? 'Discord › ' + k : 'Local › ' + k, nodes);
     }
-    for (const [t, k] of [['Home', 'Home'], ['Discord', 'Servers'], ['Discord', 'Performance'], ['Discord', 'Start-up'], ['Settings', 'Menu'], ['Settings', 'Notifications']]) { try { add(t === k ? t : `${t} › ${k}`, views[NAME[k] || k]().filter(n => n.className !== 'twd-sec' && n.className !== 'twd-hero' && hit(n, q))); } catch {} }
+    for (const [t, k] of [['Home', 'Home'], ['Discord', 'Servers'], ['Discord', 'Performance'], ['Make it your own', 'Name & logo'], ['Make it your own', 'Colours'], ['Make it your own', 'Start-up'], ['Settings', 'Menu'], ['Make it your own', 'Notifications']]) { try { add(t === k ? t : `${t} › ${k}`, views[NAME[k] || k]().filter(n => n.className !== 'twd-sec' && n.className !== 'twd-hero' && hit(n, q))); } catch {} }
     for (const pp of pagePlugins()) { const whole = `${pp.page} ${pp.name}`.toLowerCase().includes(q), block = pluginBlock(pp); add(pp.page, whole ? block : block.filter(n => hit(n, q))); }
     return [...(jumps.length ? [h('div', { className: 'twd-chips' }, ...jumps)] : []), ...(out.length || jumps.length ? out : [h('div', { className: 'twd-out', textContent: 'No match for “' + query.trim() + '”.' })])];
   };
@@ -558,7 +585,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     Rose: { bg: '#1f1720', side: '#171018', deep: '#110b12', input: '#2a1f2c', text: '#f1e6f0', head: '#fff2fb', muted: '#a08ba0', hover: 'rgba(255,255,255,.05)', line: '#33263a', brand: '#ff7aa8', link: '#ff9cc0', thumb: '#3b2c42' },
   };
   const STYLE_NOTE = { Discord: 'Follows your Discord theme', Dusk: 'Deep indigo, violet glow', Midnight: 'Pure black', Paper: 'Light and calm', Ember: 'Warm dark, amber accent', Rose: 'Dark plum, soft pink' };
-  const themeVars = () => { const out = {}; for (const el of [document.documentElement, document.body]) { const cs = getComputedStyle(el); for (const [k, [names]] of Object.entries(TH)) if (!out[k]) for (const n of names) { const v = cs.getPropertyValue(n).trim(); if (v) { out[k] = v; break; } } } for (const [k, [, fb]] of Object.entries(TH)) out[k] ||= fb; const st = MENU_STYLES[T.ls.get('menuStyle', 'Discord')]; if (st) { const { extra, ...cols } = st; Object.assign(out, cols); } return out; };
+  const themeVars = () => { const out = {}; for (const el of [document.documentElement, document.body]) { const cs = getComputedStyle(el); for (const [k, [names]] of Object.entries(TH)) if (!out[k]) for (const n of names) { const v = cs.getPropertyValue(n).trim(); if (v) { out[k] = v; break; } } } for (const [k, [, fb]] of Object.entries(TH)) out[k] ||= fb; const st = MENU_STYLES[T.ls.get('menuStyle', 'Discord')]; if (st) { const { extra, ...cols } = st; Object.assign(out, cols); } const ac = T.brand().accent; if (ac) out.brand = ac; return out; };
   // The chosen menu style written over Discord's own colour variables too, so the whole app follows it (switch in Settings > CSS > Menu style).
   const discordStyleCss = (c, light) => {
     const lift = p => `color-mix(in srgb, ${c.bg}, ${c.text} ${p}%)`, tint = p => `color-mix(in srgb, ${c.text} ${p}%, transparent)`;
@@ -701,8 +728,6 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
 .twd-sw.on{background:var(--tw-brand)}.twd-sw.on:after{left:14px}
 .twd-row small{font:400 12px "gg sans","Segoe UI",sans-serif;color:var(--tw-muted)}
 .twd .twd-sl input{accent-color:var(--tw-brand)}.twd .twd-sl b{color:var(--tw-head)}
-.twd-st{font:700 11px "gg sans","Segoe UI",sans-serif;letter-spacing:.04em}
-.twd-st.on{color:#23a55a}.twd-st.off{color:#f23f43}
 .twd-led{width:10px;height:10px;box-shadow:none!important}.twd-led.on,.twd-led.success{background:#23a55a}.twd-led.off,.twd-led.error{background:#f23f43}.twd-led.info{background:var(--tw-brand)}.twd-led.warn{background:#f0b232}
 .twd input,.twd select,.twd textarea{background:var(--tw-input);color:var(--tw-text);border:0;border-radius:4px;padding:8px 10px;font:14px "gg sans","Segoe UI",sans-serif}
 .twd textarea{font:13px Consolas,monospace}
@@ -776,7 +801,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     paintIssues();
     POP.minBtn = btn('–', 'Minimise', () => popup.minimize());
     const hd = h('div', { className: 'twp-hd', onpointerdown: drag, ondblclick: e => { if (!e.target.closest('.twp-b,.twp-t')) popup.minimize(); } },
-      h('span', { className: 'twp-at', textContent: '@' }), h('b', { textContent: 'Twilight' }), tabs, h('span', { style: 'flex:1' }),
+      T.brand().logo ? h('img', { className: 'twp-logo', src: T.brand().logo, draggable: false }) : h('span', { className: 'twp-at', textContent: '@' }), h('b', { textContent: T.brand().name }), tabs, h('span', { style: 'flex:1' }),
       POP.minBtn, btn('✕', 'Close (the chat is forgotten)', () => popup.close()));
     POP.host = h('div', { className: 'twp-body' });
     box.append(hd, POP.host, h('div', { className: 'twd-rz', title: 'Drag to resize', onpointerdown: resize }));
@@ -857,8 +882,28 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     return true;
   };
 
+  // "Make it your own": a picked logo is cropped to a centred square and scaled to 128 px (a small PNG, a few KB, kept in settings).
+  // GIFs become their first frame there (a still picture is plenty at that size).
+  const squareLogo = file => new Promise((res, rej) => {
+    if (file.size > 16 * 1048576) return rej(new Error('Pictures up to 16 MB'));
+    createImageBitmap(file).then(img => {
+      const S = 128, c = Object.assign(document.createElement('canvas'), { width: S, height: S }), g = c.getContext('2d'), m = Math.min(img.width, img.height);
+      g.imageSmoothingQuality = 'high'; g.drawImage(img, (img.width - m) / 2, (img.height - m) / 2, m, m, 0, 0, S, S);
+      res(c.toDataURL('image/png'));
+    }, () => rej(new Error('Could not read that picture')));
+  });
+  // Puts a changed name / logo / accent everywhere it shows, without a restart.
+  const applyBrand = () => {
+    document.querySelectorAll('[data-tw-set],[data-tw-dm],[data-tw-fr]').forEach(n => n.remove()); // redrawn by the page watcher with the new name
+    keepObs?.o.disconnect(); keepObs = null;
+    if (POP.box) { const hd = POP.box.querySelector('.twp-hd'), b = hd?.querySelector(':scope > b'), b0 = T.brand(); if (b) b.textContent = b0.name;
+      const at = hd?.querySelector(':scope > .twp-at, :scope > .twp-logo'); if (at) at.replaceWith(b0.logo ? h('img', { className: 'twp-logo', src: b0.logo, draggable: false }) : h('span', { className: 'twp-at', textContent: '@' })); }
+    popup.sync(); window.dispatchEvent(new CustomEvent('tw-brand')); injectSettings(); injectLists(); render();
+  };
+  T.applyBrand = applyBrand;
   // Generated profile picture for Twilight (shown in the friends list, DM list and quick chat).
-  T.pfp = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1e5aa8"/><stop offset="1" stop-color="#0a1428"/></linearGradient></defs><rect width="64" height="64" fill="url(#g)"/><path d="M42 12a21 21 0 1 0 10 33A17 17 0 0 1 42 12z" fill="#dff4ff"/><circle cx="46" cy="40" r="2" fill="#b9ecff"/><circle cx="50" cy="26" r="1.4" fill="#b9ecff"/></svg>');
+  const MOON_PFP = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1e5aa8"/><stop offset="1" stop-color="#0a1428"/></linearGradient></defs><rect width="64" height="64" fill="url(#g)"/><path d="M42 12a21 21 0 1 0 10 33A17 17 0 0 1 42 12z" fill="#dff4ff"/><circle cx="46" cy="40" r="2" fill="#b9ecff"/><circle cx="50" cy="26" r="1.4" fill="#b9ecff"/></svg>');
+  Object.defineProperty(T, 'pfp', { configurable: true, get: () => T.brand().logo || MOON_PFP });
 
   // Twilight's entries copy Discord's own rows (class names read from the live client): a section at the bottom of User Settings,
   // a pinned row at the top of the DM list, and a row at the top of the friends list.
@@ -868,7 +913,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     const list = document.querySelector('ul[class*="sublist"][role="list"]'); if (!list || list.querySelector('[data-tw-set]')) return;
     const secs = [...list.children].filter(k => /section_/.test(k.className)); const base = secs[secs.length - 1]; if (!base) return;
     const sec = base.cloneNode(true); sec.dataset.twSet = '1';
-    const h3 = sec.querySelector('h3'); if (h3) { h3.textContent = 'Twilight'; h3.removeAttribute('id'); } sec.removeAttribute('aria-labelledby');
+    const h3 = sec.querySelector('h3'); if (h3) { h3.textContent = T.brand().name; h3.removeAttribute('id'); } sec.removeAttribute('aria-labelledby');
     const ul = sec.querySelector('ul'), tpl = ul.querySelector('li'); ul.replaceChildren();
     const mk = (label, fn) => {
       const li = tpl.cloneNode(true); li.removeAttribute('data-settings-sidebar-item');
@@ -878,7 +923,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
       li.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true })); setTimeout(fn, 250); }, true);
       return li;
     };
-    ul.append(mk('Twilight menu', () => toggle(true)));
+    ul.append(mk(T.brand().name + ' menu', () => toggle(true)));
     base.after(sec);
   };
 
@@ -906,10 +951,10 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     const dm = first();
     let n = document.querySelector('[data-tw-dm]');
     if (dm && !n) {
-      n = dm.cloneNode(true); n.dataset.twDm = '1'; blank(n, 'Twilight, pinned assistant'); unselect(n); paint(n);
+      n = dm.cloneNode(true); n.dataset.twDm = '1'; blank(n, T.brand().name + ', pinned assistant'); unselect(n); paint(n);
       const a = n.querySelector('a'); if (a) { a.removeAttribute('href'); a.setAttribute('role', 'button'); }
       const box = n.querySelector('[class*="overflowTooltip"]') || n.querySelector('[class*="name_"]');
-      if (box) box.replaceChildren(h('span', { textContent: 'Twilight' }), h('span', { textContent: 'PINNED', style: 'margin-left:6px;padding:1px 4px;border-radius:3px;background:#5865f2;color:#fff;font:800 9px sans-serif;letter-spacing:.06em;vertical-align:middle' }));
+      if (box) box.replaceChildren(h('span', { textContent: T.brand().name }), h('span', { textContent: 'PINNED', style: 'margin-left:6px;padding:1px 4px;border-radius:3px;background:#5865f2;color:#fff;font:800 9px sans-serif;letter-spacing:.06em;vertical-align:middle' }));
       n.querySelectorAll('[class*="iconsContainer"]').forEach(x => x.remove());
       n.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); asst()?.quick(); }, true);
       dm.before(n);
@@ -927,16 +972,15 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
     }
     const row = document.querySelector('[class*="peopleList"] [class*="peopleListItem"]');
     if (row && !document.querySelector('[data-tw-fr]')) {
-      const f = row.cloneNode(true); f.dataset.twFr = '1'; blank(f, 'Twilight'); unselect(f); f.style.opacity = '1';
-      f.querySelector('[class*="username"]')?.replaceChildren('Twilight'); f.querySelectorAll('[class*="chipletContainer"]').forEach(x => x.remove());
-      const d = f.querySelector('[class*="discriminator"]'); if (d) d.textContent = 'twilight';
+      const f = row.cloneNode(true); f.dataset.twFr = '1'; blank(f, T.brand().name); unselect(f); f.style.opacity = '1';
+      f.querySelector('[class*="username"]')?.replaceChildren(T.brand().name); f.querySelectorAll('[class*="chipletContainer"]').forEach(x => x.remove());
+      const d = f.querySelector('[class*="discriminator"]'); if (d) d.textContent = T.brand().name.toLowerCase().replace(/\s+/g, '');
       f.querySelectorAll('[class*="actions"],[class*="actionButtons"]').forEach(x => x.remove());
       paint(f, T.limited() ? asstText() : projText() || 'Your assistant');
       f.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); asst()?.quick(); }, true);
       row.before(f);
     } else { const f = document.querySelector('[data-tw-fr]'); if (f && f.dataset.twState !== (T.limited() ? 'idle' : 'on')) paint(f, T.limited() ? asstText() : projText() || 'Your assistant'); }
   };
-  const injectButton = () => {};
 
   T.debug = {
     applyMenuStyle,
@@ -955,7 +999,7 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
       T.debug.cfgKey = opts.debugKey || def; T.debug.key = T.ls.get('menuKey') || T.debug.cfgKey; // set in the menu (Tools > Menu key), else config.json debugKey, else the default
       T.debug.version = opts.version || '?';
       T.debug.kb = opts.kb; T.debug.safe = !!opts.safe; T.debug.sizes = opts.sizes || {}; T.debug.hasKey = !!opts.hasKey;
-      document.documentElement.append(h('style', { textContent: CSS + POPCSS }));
+      document.documentElement.append(h('style', { textContent: POPCSS })); // the menu's own CSS goes into the menu frame only (1.23.0)
       applyMenuStyle(); applyPanelButtons();
       applyCss(store.get());
       applyFx();
@@ -968,7 +1012,6 @@ html[data-tw-lite] #twp{backdrop-filter:none!important;-webkit-backdrop-filter:n
       }, true);
       // Twilight's rows (settings sidebar, DM list, friends list) are put back after Discord redraws: through core's one shared page watcher.
       T._domWatch(() => { injectSettings(); injectLists(); }, 500);
-      injectButton();
     },
   };
 })();

@@ -38,25 +38,11 @@
     } catch (e) { addLog('error', [e], true); }
   };
   const CHUNK = 'webpackChunkdiscord_app'; // change if Discord renames it
-  const patches = [], plugins = new Map();
+  const plugins = new Map();
   let wreq;
 
-  // Rewrite a module's source before it runs.
-  const patch = (id, f) => {
-    const src = Function.prototype.toString.call(f);
-    let out = src;
-    for (const p of patches) {
-      if (!out.includes(p.find)) continue;
-      for (const [match, rep] of p.replacements)
-        out = out.replace(match, typeof rep === 'string'
-          ? rep.replace(/\$self/g, `Twilight.plugins.get(${JSON.stringify(p.plugin)})`) : rep);
-    }
-    if (out === src) return f;
-    try { return (0, eval)(`(${out})\n//# sourceURL=twilight/${id}.js`); }
-    catch (e) { console.error('[twilight] patch failed for module', id, e); return f; }
-  };
-
-  // Intercept webpack's chunk array so we see every module factory and the webpack require.
+  // Intercept webpack's chunk array to catch webpack's require as early as possible. (Source patching was removed in 1.23.0:
+  // no plugin used it, and it meant reading the source of every one of Discord's ~9000 modules when patches existed.)
   const hook = arr => {
     const native = arr.push;
     let cb = native, depth = 0;
@@ -67,7 +53,6 @@
         depth++;
         try {
           for (const c of a) {
-            if (patches.length) for (const id in c[1] || {}) c[1][id] = patch(id, c[1][id]);
             if (typeof c[2] === 'function' && !wreq) {
               const rt = c[2];
               c[2] = function (r) { wreq ||= r; return rt.apply(this, arguments); };
@@ -222,6 +207,9 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
     }
     if (moved || !Object.keys(seed).length) setTimeout(saveSoon, 3000);
   } catch {}
+  // Settings that no code reads any more (removed features): dropped once, so they stop being loaded and re-saved with every change.
+  // voicelog: VoiceLog (removed 1.15.0) · ignorelog: IgnoreWatch · glass: window glass · tabUse: old menu usage counter · fw, size2, clonerPassed: older names
+  for (const k of ['voicelog', 'ignorelog', 'glass', 'tabUse', 'fw', 'size2', 'clonerPassed', 'clonerPassedV2', 'liteAuto']) if (mem.has(k)) { mem.delete(k); try { storage?.removeItem('twilight-' + k); } catch {} setTimeout(saveSoon, 3000); }
   // Plugins marked `devOnly` (test and developer tools) start switched off; turning one on in the menu is remembered in 'on'.
   const isOff = n => ls.get('off', []).includes(n) || (!!plugins.get(n)?.devOnly && !ls.get('on', []).includes(n));
   const setOff = (n, off) => {
@@ -229,14 +217,28 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
     ls.set('on', ls.get('on', []).filter(x => x !== n).concat(!off && plugins.get(n)?.devOnly ? [n] : []));
   };
 
-  // Flux stores expose getName(); cached after the first hit. A miss walks every webpack module (thousands), so misses are
-  // remembered for 10 s: a store Discord renamed would otherwise cost a full walk on every call from every timer.
-  const stores = new Map(), storeMiss = new Map();
+  // Flux stores expose getName(). 1.23.0: looked up in Flux's own list of every store (Store.getAll(), about 560 stores in under 1 ms)
+  // instead of walking all ~9000 webpack modules for each new name (about 18 ms per name, measured, and ~20 names are used).
+  // The walk stays as the fallback. Misses are remembered for 10 s so a renamed store never costs a walk on every call.
+  const stores = new Map(), storeMiss = new Map(); let fluxAll = null, fluxN = -1;
+  const isStore = m => (typeof m === 'object' || typeof m === 'function') && m !== null && typeof m.getName === 'function';
+  const regOf = s => { let C = s?.constructor; for (let i = 0; C && i < 4; i++, C = Object.getPrototypeOf(C)) if (typeof C.getAll === 'function') return C; return null; };
+  const fromRegistry = n => {
+    // unlock: any one store leads to the list. The walk stops at the first store it meets (~2 ms, measured), not at a named one (5-40 ms).
+    if (!fluxAll) { for (const s of stores.values()) if ((fluxAll = regOf(s))) break; if (!fluxAll && wreq) { const any = find(m => isStore(m) && !!regOf(m)); if (any) fluxAll = regOf(any); } }
+    if (!fluxAll) return;
+    let all; try { all = fluxAll.getAll(); } catch { return; }
+    if (all.length !== fluxN) { fluxN = all.length; for (const s of all) { try { const k = s.getName(); if (typeof k === 'string' && !stores.has(k)) stores.set(k, s); } catch {} } }
+    return stores.get(n);
+  };
   const findStore = n => {
     if (stores.has(n)) return stores.get(n);
     if (Date.now() - (storeMiss.get(n) || 0) < 10000) return;
-    const s = find(m => (typeof m === 'object' || typeof m === 'function') && 'getName' in m && m.getName?.() === n);
-    if (s) { stores.set(n, s); storeMiss.delete(n); } else storeMiss.set(n, Date.now());
+    let s = fromRegistry(n);
+    // Once Flux's list is known, a store missing from it has not been created yet (stores add themselves when made), so walking every
+    // module cannot find it either: skip the walk (1.23.0.d3; Discord creates some stores, like QuestStore, a few seconds after start).
+    if (!s && !fluxAll) { s = find(m => isStore(m) && m.getName() === n); if (s) { stores.set(n, s); fromRegistry(n); } } // the first hit also unlocks the registry
+    if (s) storeMiss.delete(n); else storeMiss.set(n, Date.now());
     return s;
   };
 
@@ -247,18 +249,12 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
   // ---- cost meter: every plugin's CPU time is counted by name (events, timers, observers, network checks) ----
   let cur = null; // the plugin whose code is running right now
   const slot = n => cost.by[n] ||= { ms: 0, n: 0, max: 0, start: 0 };
-  const lagAt = {}, LAG_MS = 30; // one plugin call longer than this is worth a warning
-  const lag = (name, ms) => {
-    // Recorded in the Cost tab only (no pop-ups): the worst single call per plugin is shown there.
-    lagAt[name] = Date.now();
-  };
   const timed = (name, f) => function (...a) {
     const prev = cur, t0 = performance.now(); cur = name;
     try { return f.apply(this, a); }
     finally {
       const dt = performance.now() - t0; cur = prev;
-      const s = slot(name); s.ms += dt; s.n++; if (dt > s.max) s.max = dt;
-      if (dt > LAG_MS) lag(name, dt);
+      const s = slot(name); s.ms += dt; s.n++; if (dt > s.max) s.max = dt; // the worst single call shows in the Cost tab
     }
   };
   // Code a plugin schedules while it is running keeps the plugin's name (timers, observers).
@@ -412,6 +408,7 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
   };
 
   // ---- right-click menu helper: plugins add entries to Discord's own menus (or our own small menu if Discord shows none) ----
+  const assetP = {};
   const ctxFns = new Map(); let ctxLast = null, ctxMO, ownMenu;
   const closeOwn = () => { ownMenu?.remove(); ownMenu = null; };
   const itemsFor = t => { const out = []; for (const [k, f] of ctxFns) { try { const r = f(t); if (r?.length) out.push(...r); } catch (e) { console.warn('[twilight] menu', k, e); } } return out; };
@@ -421,7 +418,7 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
     const sep = menu.querySelector('[role="separator"]');
     const wrap = el('div'); wrap.dataset.twCtx = '1'; wrap.setAttribute('role', 'group');
     if (sep) wrap.append(sep.cloneNode(true));
-    const hd = el('div', 'Twilight'); hd.style.cssText = 'padding:6px 8px 2px;font:700 11px "gg sans","Segoe UI",sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--channels-default,#949ba4);user-select:none'; wrap.append(hd);
+    const hd = el('div', window.Twilight.brand().name); hd.style.cssText = 'padding:6px 8px 2px;font:700 11px "gg sans","Segoe UI",sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--channels-default,#949ba4);user-select:none'; wrap.append(hd);
     for (const it of items) {
       const row = document.createElement('div'); row.setAttribute('role', 'menuitem'); row.tabIndex = -1;
       row.className = (first?.className || '') + ' tw-ctx-item';
@@ -566,18 +563,37 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
     suggestLite(why) { console.warn(`[twilight] ${why}`); try { this.notify('Discord is stuttering', 'Try Tools > Housekeeping > Ultra lightweight mode (' + why + ')', 8000, 'warn'); } catch {} },
     scoped, cost, timed, every: (name, ms, f) => { const id = _si.call(window, timed(name, f), ms); return () => clearInterval(id); },
     definePlugin(p) {
+      const was = plugins.get(p.name); if (was?.lazy) p.wasLazy = true; // a switched-off plugin's real code arriving (see loadPlugin)
       plugins.set(p.name, p);
-      for (const x of p.patches || [])
-        patches.push({ plugin: p.name, find: x.find, replacements: [].concat(x.replacement).map(r => [r.match, r.replace]) });
       return p;
     },
-    info: () => (grab(), { chunk: CHUNK, ready: !!wreq, modules: wreq ? Object.keys(wreq.c).length : 0, patches: patches.length }),
+    // Plugins that are switched off are not part of the start-up bundle (1.23.0): twilight.js sends a small stand-in with the name and
+    // description, and the real code is fetched from the mod folder the moment you switch it on. Resolves with the real plugin.
+    async loadPlugin(name) {
+      const p = plugins.get(name); if (!p?.lazy) return p;
+      const r = await this.cmd({ type: 'pluginSrc', file: p.lazy }, 8000);
+      if (!r?.code) throw new Error('could not read ' + p.lazy + '.js');
+      try { (0, eval)(`try{\n${r.code}\n}catch(e){console.error("[twilight] plugin ${p.lazy}",e)}\n//# sourceURL=twilight/${p.lazy}.js`); } catch (e) { throw new Error('plugin code failed: ' + (e.message || e)); }
+      const real = plugins.get(name); if (!real || real.lazy) throw new Error(p.lazy + '.js did not define ' + name);
+      try { this.debug.sizes[name] = r.code.length; } catch {}
+      return real;
+    },
+    // Bigger, rarely used parts of a plugin (assets/<name>.js, one JavaScript expression), loaded on first use and kept.
+    asset(name) {
+      return (assetP[name] ||= this.cmd({ type: 'asset', name }, 10000).then(r => {
+        if (!r?.code) throw new Error('asset ' + name + ' missing');
+        return (0, eval)(`(${r.code}\n)\n//# sourceURL=twilight/assets/${name}.js`);
+      }).catch(e => { delete assetP[name]; throw e; }));
+    },
+    // "Make it your own" (menu): your own name, logo and accent for everything Twilight shows. Falls back to Twilight's own.
+    brand() { const b = ls.get('brand', null) || {}; return { name: String(b.name || '').trim().slice(0, 24) || 'Twilight', logo: typeof b.logo === 'string' && b.logo.startsWith('data:image/') ? b.logo : null, accent: /^#[0-9a-f]{6}$/i.test(b.accent || '') ? b.accent : null, channel: b.channel !== false }; },
+    info: () => (grab(), { chunk: CHUNK, ready: !!wreq, modules: wreq ? Object.keys(wreq.c).length : 0, stores: stores.size }),
     // The little "loaded" popup. Title, text, time, colour and on/off are editable in the menu (Notify tab).
-    startupDefaults: { on: true, title: 'Twilight-Cord', msg: 'Loaded · v{version} · {plugins} plugins', ms: 4000, type: 'success' },
+    startupDefaults: { on: true, title: '{name}-Cord', msg: 'Loaded · v{version} · {plugins} plugins', ms: 4000, type: 'success' },
     startupPopup(version, force) {
       const c = { ...this.startupDefaults, ...ls.get('startup', {}) };
       if (!c.on && !force) return;
-      const n = [...plugins.keys()].filter(k => !isOff(k)).length, fill = t => String(t).replace(/\{version\}/g, version || '').replace(/\{plugins\}/g, n).replace(/\{time\}/g, new Date().toLocaleTimeString([], { hour12: false }));
+      const n = [...plugins.keys()].filter(k => !isOff(k)).length, fill = t => String(t).replace(/\{version\}/g, version || '').replace(/\{plugins\}/g, n).replace(/\{name\}/g, this.brand().name).replace(/\{time\}/g, new Date().toLocaleTimeString([], { hour12: false }));
       notify(fill(c.title), fill(c.msg), +c.ms || 4000, c.type);
     },
     start(css, opts = {}) {

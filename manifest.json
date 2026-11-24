@@ -1,5 +1,5 @@
 {
-  "version": "1.22.2",
+  "version": "1.23.0",
   "files": [
     "core.js",
     "debug.js",
@@ -28,6 +28,7 @@
     "plugins/typingSpeed.js",
     "plugins/welcomeHint.js",
     "plugins/viewIcons.js",
+    "assets/petpet.js",
     "twilight.js",
     "themes/midnight.css",
     "measure.js",

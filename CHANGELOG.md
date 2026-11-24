@@ -1,5 +1,26 @@
 # Twilight-Cord changelog
 
+## 1.23.0
+**New: Make it your own**
+- Twilight menu > **Make it your own**: give Twilight your own name and logo. It shows everywhere Twilight does: the label at the top, the menu window, the Home banner, right-click menus, Discord's settings sidebar, the start-up screen and popup, and the app name of /tag, /petpet and /translate. Discord itself is never renamed.
+- Choose whether the top label shows which Discord you are in (Name-Stable) or just your name.
+- Pick an accent colour for the menu, on top of any menu style. Menu styles, corner radius, the start-up screen and pop-up settings now all live in this one group.
+- Logos are cropped to a square and kept small (128 px), so they cost nothing to load.
+
+**Faster and lighter**
+- Twilight finds Discord's stores through Discord's own store list: under 1 ms instead of about 18 ms for each store it looks up (about 20 of them), which took roughly 0.4 s of work off every session, most of it during start-up.
+- Plugins you have switched off are no longer loaded at start-up at all; their code is fetched the moment you switch one on. For a new install that leaves out the Quest completer (45 KB) until you turn it on.
+- /petpet's GIF maker and hand picture (25 KB) load the first time you use /petpet instead of on every start.
+- No more one-off hiccups of 30-50 ms after start-up: the Quests counter remembers Discord's Quests icon and no longer searches for a quest store Discord has not made yet, auto-translate reads messages without making the page lay itself out, and the first store lookup stops at the first store it meets. Twilight's slowest single call after start went from about 42 ms to about 3 ms.
+- Twilight's menu styles stay inside the menu window instead of being added to Discord's page.
+- The first-run tip no longer watches the page after it is gone, FriendNotifier no longer checks every 30 seconds, and MessageLogger saves its copies once per burst (a bulk delete used to write them once per message).
+- config.json is read once instead of on nearly every request.
+- Old settings from removed features (voice log, ignore list, window glass and others) are cleared out, so they are no longer loaded and saved with every change.
+- Plugin files left behind by older versions (such as the retired window buttons) are removed.
+
+**Fixed**
+- Quest completer: quests that arrive while it is already running are picked up straight after the current run.
+
 ## 1.22.2
 **Fixed**
 - What's new: the second and third update cards showed "1" and "2" as their title instead of their version number.

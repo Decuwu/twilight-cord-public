@@ -19,7 +19,7 @@ Twilight.definePlugin({
       const q = T.ui.input('Search friends to watch'), list = h('div'), R = T.findStore('RelationshipStore');
       const draw = () => {
         const f = q.value.toLowerCase(), ids = (R?.getFriendIDs?.() || []).filter(id => p.nameOf(id).toLowerCase().includes(f)).sort((a, b) => w.includes(b) - w.includes(a)).slice(0, f ? 30 : 12);
-        list.replaceChildren(...ids.map(id => T.ui.ledRow(p.nameOf(id), w.includes(id), () => { const n = p.watched(); T.ls.set('friendwatch', n.includes(id) ? n.filter(x => x !== id) : [...n, id]); T.debug.refresh(); }, 'watch', '')));
+        list.replaceChildren(...ids.map(id => T.ui.ledRow(p.nameOf(id), w.includes(id), () => { const n = p.watched(); T.ls.set('friendwatch', n.includes(id) ? n.filter(x => x !== id) : [...n, id]); if (!n.includes(id)) p.snap?.(id); T.debug.refresh(); }, 'watch', '')));
         if (!ids.length) list.append(h('div', { className: 'twd-out', textContent: R ? 'No friends match.' : 'Friend list not available yet.' }));
       };
       q.oninput = draw; setTimeout(draw);
@@ -44,7 +44,7 @@ Twilight.definePlugin({
     me.hook = r => { const m = /\/users\/@me\/relationships\/(\d+)/.exec(r.url || ''); if (m && /DELETE/i.test(r.method || '')) selfRemoved.set(m[1], Date.now()); };
     T.net.add(me.hook, 'FriendNotifier');
     me.t0 = setTimeout(() => me.watched().forEach(snap), 15000);
-    me.t1 = setInterval(() => me.watched().forEach(id => { if (!mine.has(id)) snap(id); }), 30000); // newly watched friends get a baseline too
+    me.snap = snap; // a newly watched friend gets a baseline straight away (from the Friends page; 1.23.0: no 30 s timer)
     me.undo = T.onFlux({
       RELATIONSHIP_REMOVE: a => {
         me.seen++; const rel = a.relationship || a, id = rel.id || a.id;
@@ -69,5 +69,5 @@ Twilight.definePlugin({
       },
     }, 'FriendNotifier');
   },
-  stop() { this.undo?.(); clearTimeout(this.t0); clearInterval(this.t1); Twilight.net.remove(this.hook); },
+  stop() { this.undo?.(); clearTimeout(this.t0); this.snap = null; Twilight.net.remove(this.hook); },
 });

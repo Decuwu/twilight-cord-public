@@ -17,8 +17,8 @@ Twilight.definePlugin({
           <svg viewBox="0 0 40 52" width="34" height="44" aria-hidden="true"><path d="M8 50 C 4 34, 12 20, 28 9" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/><path d="M14 6 L 30 7 L 25 22" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </div>
         <div class="tw-wlc-card">
-          <b>Twilight is installed</b>
-          <p>Click <u>Twilight</u> up here, or press <kbd></kbd>, to open its menu.</p>
+          <b>${T.brand().name} is installed</b>
+          <p>Click <u>${T.brand().name}</u> up here, or press <kbd></kbd>, to open its menu.</p>
           <div class="tw-wlc-btns"><button data-a="open">Open menu</button><button data-a="skip">Got it</button></div>
         </div>`;
       me.el = root;
@@ -29,6 +29,7 @@ Twilight.definePlugin({
       });
       document.body.append(root);
       me.paint(); me.place();
+      me.stopDom ||= T.onDom('Welcome hint', () => { if (me.el) { me.place(); me.paint(); } }, 300); // only while the tip is showing
     };
     me.paint = () => { // the key can be changed in the menu: always show the current one
       const k = me.el?.querySelector('kbd'); if (k) k.textContent = T.debug?.keyName?.(T.debug.key) || String(T.debug?.key || '');
@@ -45,7 +46,7 @@ Twilight.definePlugin({
       if (T.ls.get('welcome') !== 'done') T.ls.set('welcome', 'done');
       me.hide();
     };
-    me.hide = () => { me.el?.remove(); me.el = null; document.querySelectorAll('.tw-pulse').forEach(e => e.classList.remove('tw-pulse')); };
+    me.hide = () => { me.stopDom?.(); me.stopDom = null; me.el?.remove(); me.el = null; document.querySelectorAll('.tw-pulse').forEach(e => e.classList.remove('tw-pulse')); };
     T.welcome = { show: () => { T.ls.set('welcome', 'pending'); me.show(); }, done: () => me.done(), active: () => !!me.el };
     me.s = Object.assign(document.createElement('style'), { textContent: `
       .tw-wlc { position: fixed; z-index: 99999; visibility: hidden; pointer-events: none; font: 500 13px/1.4 "gg sans","Segoe UI",sans-serif; color: var(--text-normal,#dbdee1); }
@@ -74,7 +75,6 @@ Twilight.definePlugin({
       const n = (T.ls.get('welcomeN') || 0) + 1; T.ls.set('welcomeN', n);
       if (n > 3) me.done(); else { me.show(); }
     }
-    me.stopDom = T.onDom('Welcome hint', () => { if (me.el) { me.place(); me.paint(); } }, 300);
     me.rs = () => me.place(); window.addEventListener('resize', me.rs);
   },
   stop() { try { this.stopDom?.(); } catch {} window.removeEventListener('resize', this.rs); this.hide?.(); this.s?.remove(); delete Twilight.welcome; }

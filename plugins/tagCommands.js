@@ -32,8 +32,8 @@ Twilight.definePlugin({
       commands[c.id] = { version: ver, id: c.id, untranslatedName: c.name, serverLocalizedName: c.name, applicationId: APP, type: 1, inputType: c.sub === 'use' ? 1 : 0, untranslatedDescription: c.desc, options: shown, rootCommand: root, dmPermission: true, displayName: c.name, displayDescription: c.desc, contexts: [0, 1, 2], integration_types: [0, 1],
         execute: (opts, ctx) => me.exec(c, opts, ctx) };
     }
-    const bot = { id: APP, username: 'Twilight', discriminator: '0', avatar: null, bot: true, system: false, flags: 0, publicFlags: 0, globalName: null };
-    const descriptor = { type: 1, id: APP, name: 'Twilight', icon: null, application: { description: 'Twilight client tools', icon: null, id: APP, name: 'Twilight', bot, flags: '0', embedded_surfaces: [] }, isUserApp: false, botId: APP };
+    const bot = { id: APP, username: Twilight.brand().name, discriminator: '0', avatar: null, bot: true, system: false, flags: 0, publicFlags: 0, globalName: null };
+    const descriptor = { type: 1, id: APP, name: Twilight.brand().name, icon: null, application: { description: Twilight.brand().name + ' client tools', icon: null, id: APP, name: Twilight.brand().name, bot, flags: '0', embedded_surfaces: [] }, isUserApp: false, botId: APP };
     return { descriptor, commands };
   },
   inject() {
@@ -41,8 +41,8 @@ Twilight.definePlugin({
     const st = T.findStore('ApplicationCommandIndexStore'); if (!st) return 0;
     if (!me.section || me.sig !== me.sigNow()) me.section = me.build(); // rebuilt when your saved tags change (they are the choices for /tag)
     const section = me.section;
-    try { if (!T.findStore('ApplicationStore')?.getApplication(me.APP)) { const a = section.descriptor.application; T.dispatcher()?.dispatch({ type: 'APPLICATION_FETCH_SUCCESS', application: { id: me.APP, name: 'Twilight', icon: null, description: a.description, bot: a.bot, flags: 0, type: null } }); } } catch {}
-    try { if (!T.findStore('UserStore')?.getUser(me.APP)) T.dispatcher()?.dispatch({ type: 'USER_UPDATE', user: { id: me.APP, username: 'Twilight', discriminator: '0', avatar: null, bot: true, global_name: null, public_flags: 0, flags: 0 } }); } catch {}
+    try { if (!T.findStore('ApplicationStore')?.getApplication(me.APP)) { const a = section.descriptor.application; T.dispatcher()?.dispatch({ type: 'APPLICATION_FETCH_SUCCESS', application: { id: me.APP, name: T.brand().name, icon: null, description: a.description, bot: a.bot, flags: 0, type: null } }); } } catch {}
+    try { if (!T.findStore('UserStore')?.getUser(me.APP)) T.dispatcher()?.dispatch({ type: 'USER_UPDATE', user: { id: me.APP, username: T.brand().name, discriminator: '0', avatar: null, bot: true, global_name: null, public_flags: 0, flags: 0 } }); } catch {}
     const put = ix => { const r = ix?.result; if (!r || !r.sections) return; if (r.sections[me.APP] !== section) { r.sections[me.APP] = section; n++; } if (r.sectionIdsByBotId && r.sectionIdsByBotId[me.APP] !== me.APP) r.sectionIdsByBotId[me.APP] = me.APP; };
     for (const ix of Object.values(st.indices || {})) put(ix);
     try { put(st.getUserState()); } catch {} // DMs and group chats read the user-level list

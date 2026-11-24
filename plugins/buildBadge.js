@@ -21,7 +21,7 @@ Twilight.definePlugin({
     const CHANGELOG = 'https://github.com/Decuwu/twilight-cord-public/blob/main/CHANGELOG.md';
     const make = () => {
       const el = document.createElement('div'); el.className = 'tw-badge';
-      const b = document.createElement('b'); b.textContent = 'Twilight' + (name ? '-' + name : ''); b.title = 'Open the Twilight menu';
+      const br = T.brand(), b = document.createElement('b'); b.textContent = br.name + (name && br.channel ? '-' + name : ''); b.title = 'Open the ' + br.name + ' menu';
       b.onclick = e => { e.stopPropagation(); T.debug?.toggle?.(true); };
       const i = document.createElement('i'); i.textContent = 'v' + (T.version || ''); i.title = 'What changed (opens the changelog on GitHub)';
       i.onclick = e => { e.stopPropagation(); window.open(CHANGELOG, '_blank'); };
@@ -34,7 +34,9 @@ Twilight.definePlugin({
       if (!el) el = make();
       tr.prepend(el);
     };
+    me.onBrand = () => { document.querySelectorAll('.tw-badge').forEach(e => e.remove()); put(); };
+    window.addEventListener('tw-brand', me.onBrand);
     put(); me.stopDom = T.onDom('Build badge', put, 500);
   },
-  stop() { try { this.stopDom?.(); } catch {} this.s?.remove(); document.querySelectorAll('.tw-badge').forEach(e => e.remove()); }
+  stop() { try { this.stopDom?.(); } catch {} window.removeEventListener('tw-brand', this.onBrand); this.s?.remove(); document.querySelectorAll('.tw-badge').forEach(e => e.remove()); }
 });

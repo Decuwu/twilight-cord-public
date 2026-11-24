@@ -214,7 +214,9 @@ Twilight.definePlugin({
       T.notify('Translate', `Auto-translate turned off: ${why}. Turn it back on with /translate auto: Start`, 9000, 'warn');
     };
     const autoOne = async li => {
-      const el = li.querySelector('[id^="message-content-"]'), text = (el?.innerText || '').trim();
+      // textContent, not innerText: innerText makes the browser lay out the whole page first (30-40 ms while Discord is still drawing
+      // after start, measured in 1.23.0). Discord keeps line breaks as real newlines in message text, so the text read is the same.
+      const el = li.querySelector('[id^="message-content-"]'), text = (el?.textContent || '').trim();
       if (!el || text.length < 2 || !/\p{L}{2,}/u.test(text) || li.querySelector('.tw-tr')) return;
       const to = T.opt('Translate', 'to', 'en'), engine = T.opt('Translate', 'engine', 'google') === 'deepl' ? 'deepl' : 'google';
       const r = await T.cmd({ type: 'translate', text: text.slice(0, 1500), to, engine, key: engine === 'deepl' ? T.ls.get('deeplKey', '') : undefined }, 15000).catch(() => null);

@@ -9,6 +9,9 @@ if (process.type === 'browser') {
   const jsonStrict = f => { try { const o = JSON.parse(fs.readFileSync(path.join(__dirname, f), 'utf8')); return o && typeof o === 'object' && !Array.isArray(o) ? o : undefined; } catch { return undefined; } };
   const writeAtomic = (f, text) => { const out = path.join(__dirname, f), tmp = out + '.tmp'; fs.writeFileSync(tmp, text); fs.renameSync(tmp, out); };
   const name = n => path.basename(String(n));
+  // config.json, read once and again only when the file changes (1.23.0: it was read and parsed from disk on nearly every request).
+  let cfgC = null;
+  const config = () => { let m = 0; try { m = fs.statSync(path.join(__dirname, 'config.json')).mtimeMs; } catch {} if (!cfgC || cfgC.m !== m) cfgC = { m, v: json('config.json') }; return cfgC.v; };
   // One line per event in reports/launch.txt (starts, restarts, page ready), so a restart can be checked from the folder.
   const note = s => { try { fs.mkdirSync(path.join(__dirname, 'reports'), { recursive: true }); fs.appendFileSync(path.join(__dirname, 'reports', 'launch.txt'), `${new Date().toISOString()} ${s}\n`); } catch {} };
   // Which Discord this is. Stable, PTB and Canary share this folder, so anything aimed at one of them checks this.
@@ -40,7 +43,7 @@ if (process.type === 'browser') {
   };
   boot(`twilight v${json('manifest.json').version || '?'} loaded`);
   let compareWaiting = false; // true while the Twilight half of a stock comparison is still being measured
-  const slimCfg = () => { const v = json('config.json').slim; return v && typeof v === 'object' ? v : {}; };
+  const slimCfg = () => { const v = config().slim; return v && typeof v === 'object' ? v : {}; };
   const SLIM = slimCfg();
   const BLOCK = new Set([...(SLIM.games ? ['discord_overlay2', 'discord_desktop_overlay', 'discord_cloudsync', 'discord_dispatch'] : []), ...(SLIM.krisp ? ['discord_krisp'] : [])]);
   const blockedPath = p => {
@@ -109,19 +112,35 @@ if (process.type === 'browser') {
     catch { return []; }
   };
 
+  // A switched-off plugin is not part of the start-up bundle (1.23.0): it goes in as a stand-in with its name and description (so the
+  // menu can list it), and its code is fetched with 'pluginSrc' when you switch it on. Only the top-level fields are read here.
+  const STR = `('(?:[^'\\\\]|\\\\.)*'|"(?:[^"\\\\]|\\\\.)*")`;
+  const metaOf = src => {
+    const i = src.indexOf('definePlugin('); if (i < 0) return null; const head = src.slice(i, i + 4000), m = {};
+    for (const k of ['name', 'desc', 'vs', 'page', 'group', 'place']) { const r = new RegExp(`\\b${k}:\\s*${STR}`).exec(head); if (r) m[k] = r[1]; }
+    for (const k of ['devOnly', 'heavy', 'actionOnly']) m[k] = new RegExp(`\\b${k}:\\s*true`).test(head);
+    return m.name ? m : null;
+  };
   const build = () => {
-    const cfg = json('config.json'), off = new Set(cfg.disabled || []);
+    const cfg = config(), off = new Set(cfg.disabled || []);
+    const st = json('settings.json'), offList = new Set(Array.isArray(st.off) ? st.off : []), onList = new Set(Array.isArray(st.on) ? st.on : []);
     // Safe mode: only the core and the menu load (no plugins, no themes). Switch on with the menu, config.json "safeMode": true,
     // the --twilight-safe launch flag, or by creating a file called safe.flag next to the mod.
     const safe = !!cfg.safeMode || process.argv.includes('--twilight-safe') || fs.existsSync(path.join(__dirname, 'safe.flag'));
     const sizes = {};
     const plugins = safe ? '' : listPlugins().filter(n => !off.has(n)).map(n => {
-      const src = read(`plugins/${name(n)}.js`); sizes[name(n)] = src.length;
+      const src = read(`plugins/${name(n)}.js`), m = metaOf(src);
+      // plugins with menu actions while off (actionOnly) always load; everything else that is off waits until it is switched on
+      if (m && !m.actionOnly && (offList.has((0, eval)(m.name)) || (m.devOnly && !onList.has((0, eval)(m.name))))) {
+        sizes[(0, eval)(m.name)] = src.length;
+        return `Twilight.definePlugin({lazy:${JSON.stringify(name(n))},name:${m.name}${['desc', 'vs', 'page', 'group', 'place'].map(k => m[k] ? `,${k}:${m[k]}` : '').join('')}${m.devOnly ? ',devOnly:true' : ''}${m.heavy ? ',heavy:true' : ''}});`;
+      }
+      sizes[m ? (0, eval)(m.name) : name(n)] = src.length;
       return `try{\n${src}\n}catch(e){console.error("[twilight] plugin ${name(n)}",e)}`;
     }).join('\n');
     const css = safe ? '' : (cfg.themes || []).map(n => read(`themes/${name(n)}.css`)).join('\n');
     const opts = { version: json('manifest.json').version || '?', debugKey: cfg.debugKey, safe, sizes, hasKey: false };
-    const seed = JSON.stringify(json('settings.json')).replace(/</g, '\\u003c');
+    const seed = JSON.stringify(st).replace(/</g, '\\u003c');
     const body = `${read('core.js')}\n${read('debug.js')}\n${plugins}`;
     opts.kb = Math.round((body.length + css.length) / 1024);
     // sourceURL names the bundle in DevTools, stack traces and CPU profiles (otherwise it shows up as an anonymous script).
@@ -132,15 +151,17 @@ if (process.type === 'browser') {
   // in; Discord opens it before any mod can run, so the very first frame can still be Discord's). Only CSS plus a small text
   // swap, so Discord's own updates keep working inside it. config.json "splash": { on, logo: 'moon' | 'discord' | 'custom', text }.
   // A custom image (PNG, JPG, GIF, WebP) is saved as splash/custom.<ext> next to the mod.
-  const splashCfg = () => { const v = json('config.json').splash; return { on: true, logo: 'moon', text: '', log: true, ...(v && typeof v === 'object' ? v : {}) }; };
+  const splashCfg = () => { const v = config().splash; return { on: true, logo: 'moon', text: '', log: true, ...(v && typeof v === 'object' ? v : {}) }; };
   const splashImg = () => { try { const f = fs.readdirSync(path.join(__dirname, 'splash')).find(n => /^custom\.(png|jpe?g|gif|webp)$/i.test(n)); return f ? path.join(__dirname, 'splash', f) : null; } catch { return null; } };
   const MOON_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><defs><linearGradient id="m" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f4fbff"/><stop offset="1" stop-color="#8fc9f5"/></linearGradient></defs>'
     + '<path d="M128 28a76 76 0 1 0 44 118A62 62 0 0 1 128 28z" fill="url(#m)"/><circle cx="150" cy="62" r="4" fill="#dff4ff"/><circle cx="166" cy="98" r="2.6" fill="#b9ecff"/><circle cx="136" cy="40" r="2" fill="#b9ecff"/></svg>';
+  // "Make it your own" (menu): settings.json brand = { name, logo (small PNG data URL), channel }.
+  const brand = () => { const b = json('settings.json').brand || {}; return { name: String(b.name || '').trim().slice(0, 24) || 'Twilight', logo: typeof b.logo === 'string' && /^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/=]+$/.test(b.logo) && b.logo.length < 400000 ? b.logo : null, channel: b.channel !== false }; };
   const splashCss = () => {
-    const c = splashCfg(), img = c.logo === 'custom' && splashImg(), label = `Twilight-${{ ptb: 'PTB', stable: 'Stable', canary: 'Canary' }[CHANNEL]} · v${json('manifest.json').version || '?'}`;
+    const c = splashCfg(), B = brand(), mine = c.logo === 'brand' && B.logo, img = c.logo === 'custom' && splashImg() || mine, label = `${B.name}${B.channel ? '-' + { ptb: 'PTB', stable: 'Stable', canary: 'Canary' }[CHANNEL] : ''} · v${json('manifest.json').version || '?'}`;
     const logo = c.logo === 'discord' ? '' : `.splash-inner img{display:none!important}
-.splash-inner::before{content:'';display:block;width:${img ? 170 : 140}px;height:${img ? 170 : 140}px;margin:6px auto 40px;border-radius:${img ? 16 : 0}px;
- background:url(${JSON.stringify(img ? require('url').pathToFileURL(img).href + '?' + fs.statSync(img).mtimeMs : 'data:image/svg+xml;base64,' + Buffer.from(MOON_SVG).toString('base64'))}) center/${img ? 'cover' : 'contain'} no-repeat;
+.splash-inner::before{content:'';display:block;width:${img ? 170 : 140}px;height:${img ? 170 : 140}px;margin:6px auto 40px;border-radius:${mine ? '50%' : img ? '16px' : 0};
+ background:url(${JSON.stringify(mine ? B.logo : img ? require('url').pathToFileURL(img).href + '?' + fs.statSync(img).mtimeMs : 'data:image/svg+xml;base64,' + Buffer.from(MOON_SVG).toString('base64'))}) center/${img ? 'cover' : 'contain'} no-repeat;
  ${img ? '' : 'animation:twMoon 3.6s ease-in-out infinite;'}filter:drop-shadow(0 0 16px rgba(108,200,255,.4))}
 @keyframes twMoon{0%,100%{transform:translateY(0) rotate(-5deg);filter:drop-shadow(0 0 10px rgba(108,200,255,.3))}50%{transform:translateY(-7px) rotate(3deg);filter:drop-shadow(0 0 26px rgba(108,200,255,.65))}}
 .splash-text{top:0!important}`;
@@ -186,7 +207,7 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
   // Pop-outs can be hidden from screen capture (config.json "hidePopouts", default true; menu: Tools > Housekeeping).
   // (Window glass, the see-through window and the custom snapper were removed in 1.12.0: the main window is Discord's normal window.)
   const popouts = new Set(); let mainWin = null;
-  const hideOn = () => json('config.json').hidePopouts !== false;
+  const hideOn = () => config().hidePopouts !== false;
   // Windows are picked up through Electron's own 'browser-window-created' event. (Up to 1.15.9 this swapped in a BrowserWindow
   // subclass, which hid every window from BrowserWindow.fromId / getAllWindows, so Discord's minimise / maximise / close did nothing.)
   try {
@@ -307,7 +328,7 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
         const cfg = jsonStrict('config.json'); if (!cfg) return { ok: false, error: 'config.json unreadable, left alone' };
         const v = { ...splashCfg() };
         if (typeof c.set.on === 'boolean') v.on = c.set.on;
-        if (['moon', 'discord', 'custom'].includes(c.set.logo)) v.logo = c.set.logo;
+        if (['moon', 'discord', 'custom', 'brand'].includes(c.set.logo)) v.logo = c.set.logo;
         if (typeof c.set.log === 'boolean') v.log = c.set.log;
         if (typeof c.set.text === 'string') v.text = c.set.text.replace(/[\r\n]+/g, ' ').slice(0, 60);
         cfg.splash = v; writeAtomic('config.json', JSON.stringify(cfg, null, 2));
@@ -330,7 +351,9 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
       }
       return { saved: slimCfg(), running: { ...SLIM }, blocked: [...BLOCK] };
     }
-    if (c?.type === 'status') return { mode: 'off', hidePopouts: hideOn(), popouts: popouts.size };
+    if (c?.type === 'status') return { hidePopouts: hideOn(), popouts: popouts.size };
+    if (c?.type === 'pluginSrc' && /^[\w-]{1,40}$/.test(c.file || '') && listPlugins().includes(c.file)) { const code = read(`plugins/${c.file}.js`); return code ? { code } : null; }
+    if (c?.type === 'asset' && /^[\w-]{1,40}$/.test(c.name || '')) { const code = read(`assets/${c.name}.js`); return code ? { code } : null; }
     if (c?.type === 'popouts' && typeof c.on === 'boolean') {
       const cfg = jsonStrict('config.json'); if (!cfg) return { ok: false, error: 'config.json unreadable, left alone' };
       cfg.hidePopouts = c.on; writeAtomic('config.json', JSON.stringify(cfg, null, 2));
@@ -372,7 +395,7 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
       const now = Date.now(); if (comingCache && now - comingCache.at < 1800000) return comingCache.r;
       let text = null, from = null;
       if (isDev(json('manifest.json').version)) { const l = read('COMING_SOON.md'); if (l) { text = l; from = 'local'; } } // a dev build shows its own list (GitHub's only changes when a release is announced)
-      if (!text) try { const { repo, branch = 'main', token } = json('config.json'); if (repo) { text = (await get(`https://api.github.com/repos/${repo}/contents/COMING_SOON.md?ref=${encodeURIComponent(branch)}`, token)).toString('utf8'); from = 'github'; } } catch {}
+      if (!text) try { const { repo, branch = 'main', token } = config(); if (repo) { text = (await get(`https://api.github.com/repos/${repo}/contents/COMING_SOON.md?ref=${encodeURIComponent(branch)}`, token)).toString('utf8'); from = 'github'; } } catch {}
       if (!text) { const local = read('COMING_SOON.md'); if (local) { text = local; from = 'local'; } }
       const r = { text: text ? text.slice(0, 8000) : null, from }; comingCache = { at: now, r }; return r;
     }
@@ -404,7 +427,7 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
   });
 
   // ---- auto updater: pulls manifest.json + listed files from the (private) GitHub repo ----
-  const SAFE = /^(core\.js|debug\.js|twilight\.js|measure\.js|stock\.js|CHANGELOG\.md|feedback\.json|plugins\/[\w-]+\.js|themes\/[\w-]+\.css)$/;
+  const SAFE = /^(core\.js|debug\.js|twilight\.js|measure\.js|stock\.js|CHANGELOG\.md|feedback\.json|plugins\/[\w-]+\.js|assets\/[\w-]+\.js|themes\/[\w-]+\.css)$/;
   // Versions: "1.19.0" is a release (on GitHub); "1.19.0.d3" is local dev build 3 of what will be released as 1.19.0.
   const isDev = v => /\.d\d*$/i.test(String(v || ''));
   const num = x => parseInt(x, 10) || 0; // "13-beta" counts as 13
@@ -434,7 +457,7 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
   const swap = (from, to) => { try { fs.renameSync(from, to); } catch { fs.copyFileSync(from, to); fs.rmSync(from, { force: true }); } }; // rename can fail on Windows if something has the file open
 
   const check = async () => {
-    const { repo, branch = 'main', token } = json('config.json');
+    const { repo, branch = 'main', token } = config();
     if (!repo) return null;
     const url = f => `https://api.github.com/repos/${repo}/contents/${f}?ref=${encodeURIComponent(branch)}`;
     const remote = JSON.parse(await get(url('manifest.json'), token));
@@ -529,6 +552,8 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
   });
   app.whenReady().then(() => {
     try { keepHook(); } catch {}
+    // 1.23.0: plugin files from removed features that older updaters left behind (each one was still loaded on every start)
+    for (const f of ['plugins/windowButtons.js', 'plugins/hello.js', 'plugins/glassTheme.js', 'plugins/voiceLog.js', 'plugins/spit.js']) { try { if (fs.existsSync(path.join(__dirname, f))) { fs.rmSync(path.join(__dirname, f), { force: true }); note('removed retired ' + f); } } catch {} }
     note(`started ${CHANNEL} ${path.basename(path.dirname(process.execPath))} v${json('manifest.json').version || '?'}`);
     // After a stock run (Compare page), measure this Discord WITH Twilight the same way: same wait, same length.
     try {

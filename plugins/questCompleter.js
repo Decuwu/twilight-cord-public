@@ -80,7 +80,9 @@ Twilight.definePlugin({
   // ---- reading Discord's quest data ----
   // Discord's quest store is called QuestStore (older builds: QuestsStore). We also keep the quests Discord hands over in its own
   // "quests loaded" event, so a wrong store name cannot leave us with an empty list.
-  store() { const T = Twilight; return T.findStore('QuestStore') || T.findStore('QuestsStore') || (this._s ||= T.find(m => typeof m?.getQuest === 'function' && m.quests)); },
+  // 1.23.0: no module-walk fallback any more. Discord makes its quest store a few seconds after start, and until then a walk cannot find it
+  // either (it cost ~43 ms on the first counter paint, measured); the quests from Discord's own "quests loaded" event cover that gap.
+  store() { const T = Twilight; return T.findStore('QuestStore') || T.findStore('QuestsStore'); },
   list(x) { return !x ? [] : Array.isArray(x) ? x : typeof x.values === 'function' ? [...x.values()] : Object.values(x); },
   quests() {
     const m = new Map();
@@ -360,7 +362,8 @@ Twilight.definePlugin({
       };
       await Promise.all([...Array(nv).fill('v'), ...Array(ng).fill('g')].map(k => worker(k)));
       if (!tried.size && !errors) this.say('Nothing to do right now'); else if (!errors && !s.stop) this.say('All quests that can be done are finished');
-    } finally { clearInterval(this.tick); clearInterval(this.lockT); Twilight.cmd({ type: 'questLock', op: 'release' }).catch(() => {}); s.running = false; s.cur = {}; s.queue = {}; try { Twilight.cmd({ type: 'report', name: this.logName(), text: s.log.join('\n') }); } catch {} Twilight.debug?.refresh?.(); }
+    } finally { clearInterval(this.tick); clearInterval(this.lockT); Twilight.cmd({ type: 'questLock', op: 'release' }).catch(() => {}); s.running = false; s.cur = {}; s.queue = {}; try { Twilight.cmd({ type: 'report', name: this.logName(), text: s.log.join('\n') }); } catch {} Twilight.debug?.refresh?.();
+      if (this.again && !s.stop) { this.again = false; this.remoteAt = 0; this.say('New quests arrived while running: checking again'); setTimeout(() => this.kick?.(), 1500); } else this.again = false; }
   },
   stopNow() { this.state.stop = true; for (const a of [...(this.aborts || [])]) a(); this.say('Stopping'); },
   // What runs next, in the order the workers will take it (accepted and new quests together: in progress first, then Prioritise, then
@@ -431,7 +434,7 @@ Twilight.definePlugin({
   },
   start() {
     const me = this; let t = 0;
-    const kick = () => { if (!Twilight.opt('QuestCompleter', 'auto', true)) return; clearTimeout(t); t = setTimeout(() => { if (me.todo().length || Twilight.opt('QuestCompleter', 'enroll', true)) me.run(); }, 6000); };
+    const kick = () => { if (!Twilight.opt('QuestCompleter', 'auto', true)) return; clearTimeout(t); t = setTimeout(() => { if (me.state.running) { me.again = true; return; } if (me.todo().length || Twilight.opt('QuestCompleter', 'enroll', true)) me.run(); }, 6000); };
     me.kick = kick;
     // Discord's own "quests loaded" event carries the quest list; keep it so we never depend on finding the store.
     me.undoFlux = Twilight.onFlux({ QUESTS_FETCH_CURRENT_QUESTS_SUCCESS: d => { const a = me.list(d?.quests); if (a.length) me.evt = a; me.refresh(); kick(); }, QUESTS_ENROLL_SUCCESS: kick, CONNECTION_OPEN: kick, QUESTS_CLAIM_REWARD_SUCCESS: () => me.refresh() }, 'QuestCompleter');
@@ -455,13 +458,18 @@ Twilight.definePlugin({
   // ---- top-bar counter (left side, right of the back / forward arrows): "N to claim" and "running/available" with Discord's Quests icon ----
   // Discord's QuestsIcon is a small component that returns one <svg><path>; we take its path so the counter needs no React.
   questIcon() {
+    // 1.23.0: finding the icon walks all of Discord's modules (~40 ms, measured), so the path is kept between starts and only looked up again if missing
+    const ok = d => typeof d === 'string' && d.length < 6000 && /^[MmLlHhVvCcSsQqTtAaZz0-9 .,eE-]+$/.test(d);
+    if (this._icon === undefined) {
+      try { const kept = Twilight.ls.local.get('questIconD', null); if (ok(kept)) this._icon = kept; } catch {}
+    }
     if (this._icon === undefined) {
       this._icon = null;
       try {
         const nope = '__twq' + Math.random().toString(36).slice(2), I = Twilight.find(x => x[nope] === undefined && typeof x.QuestsIcon === 'function');
         const find = e => !e || typeof e !== 'object' ? null : e.type === 'path' ? e.props?.d : Array.isArray(e) ? e.map(find).find(Boolean) : typeof e.type === 'function' ? find(e.type(e.props)) : find(e.props?.children);
         const d = I && find(I.QuestsIcon({ size: 'xs', color: 'currentColor' }));
-        if (d) this._icon = d;
+        if (d) { this._icon = d; try { if (ok(d)) Twilight.ls.local.set('questIconD', d); } catch {} }
       } catch {}
     }
     const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');

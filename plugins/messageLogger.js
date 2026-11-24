@@ -10,8 +10,9 @@ Twilight.definePlugin({
   keyOf: e => e.at + ':' + e.id,
   // Saved copies live in Twilight.ls.local (Discord deletes window.localStorage after start-up, so a plain localStorage call here
   // silently saved nothing before 1.15.5). Not in settings.json: up to HTML_KEEP x HTML_MAX of HTML would make every settings save heavy.
-  htmlGet() { const o = Twilight.ls.local.get('msghtml', null); return o && typeof o === 'object' ? o : {}; },
-  htmlSet(o) { Twilight.ls.local.set('msghtml', o); },
+  htmlGet() { if (this._html) return this._html; const o = Twilight.ls.local.get('msghtml', null); return this._html = o && typeof o === 'object' ? o : {}; },
+  // The object is changed in place and served from memory (ls.local); writing it out (up to HTML_KEEP x HTML_MAX of text) waits 1 s, so a burst is one write.
+  htmlSet(o) { this._html = o; clearTimeout(this._hT); this._hT = setTimeout(() => { Twilight.ls.local.set('msghtml', this._html); }, 1000); },
   // Takes a message's on-screen copy off the page (all copies of that log entry).
   removeGhost(at, id) { for (const g of [...(this.ghosts || [])]) if (g.dataset.twId === String(id) && (at == null || g.dataset.twAt === String(at))) { g.remove(); this.ghosts.delete(g); } },
   // Removes one log entry together with its saved copy and the message it put on screen.
@@ -148,7 +149,7 @@ html.tw-nohl .tw-tag,.tw-ghost.tw-normal .tw-tag{display:none!important}`,
       return html;
     };
     // Counts only, never message text: written to reports/messagelogger.json so problems can be seen without reading chats.
-    const diag = this.diag = { v: '1.11.7', events: { delete: 0, edit: 0 }, noElement: 0, saved: 0, tooBig: [], sizes: [], restore: { runs: 0 } };
+    const diag = this.diag = { v: '1.23.0', events: { delete: 0, edit: 0 }, noElement: 0, saved: 0, tooBig: [], sizes: [], restore: { runs: 0 } };
     let dT = 0;
     const flush = () => { clearTimeout(dT); dT = setTimeout(() => { try { Twilight.cmd({ type: 'report', name: 'messagelogger.json', text: JSON.stringify({ at: new Date().toISOString(), ...diag, logEntries: Twilight.ls.get('msglog', []).length, savedCopies: Object.keys(this.htmlGet()).length }) }); } catch {} }, 1500); };
     this.flushDiag = flush;
@@ -219,6 +220,7 @@ html.tw-nohl .tw-tag,.tw-ghost.tw-normal .tw-tag{display:none!important}`,
     Twilight.log('MessageLogger: listening for message events');
   },
   stop() {
+    if (this._hT) { clearTimeout(this._hT); Twilight.ls.local.set('msghtml', this._html); } // write out what is waiting
     this.undo?.(); (this.rt || []).forEach(clearTimeout); clearTimeout(this.lmT);
     this.clearGhosts?.();
     this.css?.remove(); window.removeEventListener('tw-opt', this.onOpt); document.documentElement.classList.remove('tw-nohl');
