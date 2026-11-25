@@ -1,5 +1,15 @@
 # Twilight-Cord changelog
 
+## 1.24.0
+**New**
+- **AutoCollapse** (off until you switch it on, in Plugins): long walls of text fold to a few lines with "Show more" / "Show less". Choose how long counts as long, how many lines stay visible, and whether your own messages fold too. It decides from the message text itself, so it adds no work to how the page is drawn.
+- **Edit history**: every version of an edited message, oldest first, with times and a copy button. Open it by right-clicking an edited message, clicking the yellow "edited" tag, or "history" in the Message log page.
+
+**Lighter and sturdier**
+- PlatformIndicators only redraws the people whose status changed, instead of every icon on screen after any change anywhere.
+- Quest completer: finds Discord's quest functions by what they do, not only by their scrambled names, so a Discord update that renames them no longer breaks accepting and claiming. If a claim window still cannot be found, it opens Discord's Quests page to claim there.
+- MessageLogger: saved copies of deleted messages never add up to more than 0.5 MB.
+
 ## 1.23.0
 **New: Make it your own**
 - Twilight menu > **Make it your own**: give Twilight your own name and logo. It shows everywhere Twilight does: the label at the top, the menu window, the Home banner, right-click menus, Discord's settings sidebar, the start-up screen and popup, and the app name of /tag, /petpet and /translate. Discord itself is never renamed.

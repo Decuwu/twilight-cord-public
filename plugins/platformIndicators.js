@@ -24,6 +24,9 @@ Twilight.definePlugin({
 
     this.css = Object.assign(document.createElement('style'), { textContent:
       '.tw-plat{display:inline-flex;align-items:center;gap:3px;margin-left:5px;vertical-align:middle;flex:none;line-height:0;cursor:default}' +
+      // 1.24.0.d2: in member and DM rows the name box is kept to its content, so the icons sit right after the name (and its server tag).
+      // Some rows (styled display names) let the name stretch over the free space, which pushed the icons to the far right.
+      '[data-tw-pk="mem"]:has(> .tw-plat) > [class*="name"],[data-tw-pk="dm"]:has(> .tw-plat) > [class*="name"]{flex:0 1 auto!important}' +
       '.tw-plat svg{width:14px;height:14px;display:block;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}' });
     document.documentElement.append(this.css);
 
@@ -52,10 +55,27 @@ Twilight.definePlugin({
       return true;
     };
 
-    const stats = { headers: 0, headerIds: 0, members: 0, dms: 0, placed: 0 };
-    // The presence store may not exist yet at start-up, so the change listener is hooked up the first time it is found.
+    const stats = { headers: 0, headerIds: 0, members: 0, dms: 0, placed: 0, targeted: 0 };
+    // 1.24.0: a status change only redraws the people who changed (Discord's PRESENCE_UPDATES says who). Each place that shows icons is
+    // tagged with the user id and its kind when the page pass meets it, so a change can find it without scanning the page. (Up to 1.23,
+    // any change anywhere re-ran the whole pass, at most every 2 s.) A full replace (PRESENCES_REPLACE) still runs the whole pass.
     let kt = 0; const kick = () => { kt ||= setTimeout(() => { kt = 0; pass(); }, 2000); };
-    const hook = () => { if (this.ps) return; const ps = T.findStore('PresenceStore'); if (ps?.addChangeListener) { ps.addChangeListener(kick); this.ps = ps; } };
+    const hook = () => { this.ps ||= T.findStore('PresenceStore'); };
+    const tag = (host, uid, kind) => { if (host && uid && host.dataset.twUid !== uid) { host.dataset.twUid = uid; host.dataset.twPk = kind; } };
+    const changed = new Set(); let ct = 0;
+    const redraw = () => {
+      ct = 0; if (document.hidden) { changed.clear(); return; }
+      const on = { m: opt('messages'), mem: opt('members'), dm: opt('dms') };
+      for (const uid of changed) for (const host of document.querySelectorAll(`[data-tw-uid="${uid}"]`)) {
+        const k = host.dataset.twPk, name = k === 'm' ? host.closest('h3')?.querySelector('[class*="username"]') : host.querySelector('[class*="name"]');
+        place(host, k === 'm' ? name : name?.parentElement === host ? name : null, uid, !!on[k]);
+      }
+      changed.clear(); stats.targeted++;
+    };
+    this.undoFlux = T.onFlux({
+      PRESENCE_UPDATES: a => { for (const u of a?.updates || []) if (u?.user?.id) changed.add(u.user.id); if (changed.size > 200) { changed.clear(); kick(); } else if (changed.size) ct ||= setTimeout(redraw, 300); },
+      PRESENCES_REPLACE: kick,
+    }, 'PlatformIndicators');
     const pass = () => {
       if (document.hidden) return;
       hook();
@@ -66,13 +86,14 @@ Twilight.definePlugin({
         const li = h3.closest('li'), name = h3.querySelector('[class*="username"]'); if (!name) continue;
         const mm = /^chat-messages-(\d+)-(\d+)$/.exec(li.id), uid = mm && T.findStore('MessageStore')?.getMessage?.(mm[1], mm[2])?.author?.id;
         if (uid) ids++;
-        if (place(h3.querySelector('[class*="headerText"]') || h3, name, uid || '', m && !!uid)) placed++;
+        const host = h3.querySelector('[class*="headerText"]') || h3; tag(host, uid, 'm');
+        if (place(host, name, uid || '', m && !!uid)) placed++;
       }
       // Member list rows: data-list-item-id ends in the user id.
       for (const row of document.querySelectorAll('[data-list-item-id^="members"]')) {
         members++;
         const uid = (row.dataset.listItemId.match(/(\d{15,})$/) || [])[1], name = row.querySelector('[class*="name"]');
-        const host = row.querySelector('[class*="nameAndDecorators"]') || name?.parentElement;
+        const host = row.querySelector('[class*="nameAndDecorators"]') || name?.parentElement; tag(host, uid, 'mem');
         if (uid && place(host, name?.parentElement === host ? name : null, uid, mem)) placed++;
       }
       // Direct messages list: one-to-one chats only (group chats have no single device to show).
@@ -82,7 +103,7 @@ Twilight.definePlugin({
         const ch = CS?.getChannel?.((row.dataset.listItemId.match(/(\d{15,})$/) || [])[1]);
         if (!ch || ch.type !== 1) continue;
         const uid = ch.recipients?.[0], name = row.querySelector('[class*="name"]');
-        const host = row.querySelector('[class*="nameAndDecorators"]') || name?.parentElement;
+        const host = row.querySelector('[class*="nameAndDecorators"]') || name?.parentElement; tag(host, uid, 'dm');
         if (uid && place(host, name?.parentElement === host ? name : null, uid, dm)) placed++;
       }
       stats.headers = headers; stats.headerIds = ids; stats.members = members; stats.dms = dms; stats.placed = placed;
@@ -90,8 +111,7 @@ Twilight.definePlugin({
     pass();
     // Redraws are caught by the shared page watcher (at most 1.5 s apart); nothing runs while Discord is idle or minimised.
     this.stopT = T.onDom('PlatformIndicators', pass, 1500);
-    // Someone changing status or device: redo the pass soon (cheap and throttled).
-    this.kick = kick;
+    this.kick = kick; this.ct = () => clearTimeout(ct);
     this.onOpt = e => { if (e.detail?.plugin === 'PlatformIndicators') { document.querySelectorAll('.tw-plat').forEach(n => n.remove()); pass(); } };
     window.addEventListener('tw-opt', this.onOpt);
     // A small counts-only report (no names, no ids) so how it behaves on the live client can be checked without screenshots.
@@ -100,7 +120,8 @@ Twilight.definePlugin({
   },
   stop() {
     this.stopT?.(); this.rt?.forEach(clearTimeout);
-    this.ps?.removeChangeListener?.(this.kick); window.removeEventListener('tw-opt', this.onOpt);
+    this.undoFlux?.(); this.ct?.(); window.removeEventListener('tw-opt', this.onOpt);
     document.querySelectorAll('.tw-plat').forEach(n => n.remove()); this.css?.remove();
+    document.querySelectorAll('[data-tw-uid]').forEach(n => { delete n.dataset.twUid; delete n.dataset.twPk; });
   },
 });

@@ -68,15 +68,54 @@ Twilight.definePlugin({
     return { get: o => retry(x => A.get(x), o), post: o => retry(x => A.post(x), o) };
   },
   // Discord's own quest code (found by shape): D = quest actions (Oy accept, Oq claim), R = reward type checks, B = the claim windows.
+  // Discord's own quest functions (1.24.0: found by what they do, not only by their scrambled names, so a Discord update that renames
+  // them does not break the plugin).
+  //   enroll   Discord's Accept: the function that sends QUESTS_ENROLL_BEGIN
+  //   claim.*  the four claim windows, told apart by what they are opened with (collectible: a preview; code: { quest }; in-game and
+  //            Orbs: initialQuest + location + sourceQuestContent, in a different order). Any we cannot tell apart are left out, and
+  //            claiming then opens Discord's Quests page instead.
+  //   home     Discord's "open the Quests page"
+  // The names Discord uses today are tried first (no code reading, fast); the shape search only runs if one of them stops fitting.
   disc() {
-    if (this._d?.D && this._d.R && this._d.B) return this._d;
-    const nope = '__twq' + Math.random().toString(36).slice(2), F = f => Twilight.find(x => x[nope] === undefined && f(x));
-    return this._d = {
-      D: F(x => typeof x.Oy === 'function' && typeof x.Oq === 'function' && x.WM && typeof x.WM === 'object'),
-      R: F(x => ['ks', 'K9', 'tU', 'HG'].every(k => typeof x[k] === 'function')),
-      B: F(x => ['hJ', 'rx', 'cf', 'Df'].every(k => typeof x[k] === 'function')),
+    const now = Date.now();
+    if (this._d && (this._d.full || now - this._d.at < 60000)) return this._d;
+    const T = Twilight, src = f => { try { return Function.prototype.toString.call(f); } catch { return ''; } };
+    const nope = '__twq' + Math.random().toString(36).slice(2), F = f => T.find(x => x[nope] === undefined && f(x));
+    const SHAPE = {
+      collectible: f => f.length === 4 && /initialQuest:\w+[^}]*preview:\w+/.test(src(f)),
+      code: f => f.length === 1 && /\{quest:\w+,sourceQuestContent:\w+\}=\w+/.test(src(f)) && src(f).includes('initialQuest:'),
+      inGame: f => f.length === 3 && /initialQuest:\w+,location:\w+,sourceQuestContent:\w+\}/.test(src(f)),
+      orbs: f => f.length === 3 && /initialQuest:\w+,sourceQuestContent:\w+,location:\w+\}/.test(src(f)),
     };
+    const isHome = f => typeof f === 'function' && /fromContent:\w+,questId:\w+,searchParams/.test(src(f));
+    const isEnroll = f => typeof f === 'function' && src(f).includes('QUESTS_ENROLL_BEGIN');
+    const out = { at: now, claim: {}, how: 'names' };
+    // fast path: today's names, checked against their shapes
+    const D = F(x => typeof x.Oy === 'function' && typeof x.Oq === 'function');
+    if (isEnroll(D?.Oy)) out.enroll = D.Oy;
+    const B = F(x => ['hJ', 'rx', 'cf', 'Df'].every(k => typeof x[k] === 'function'));
+    const NAMES = { collectible: 'hJ', code: 'rx', inGame: 'cf', orbs: 'Df' };
+    if (B) for (const [k, n] of Object.entries(NAMES)) if (SHAPE[k](B[n])) out.claim[k] = B[n];
+    if (isHome(B?.mA)) out.home = B.mA;
+    // shape search, only for what the names did not give
+    const missing = Object.keys(SHAPE).filter(k => !out.claim[k]);
+    if (missing.length || !out.home) {
+      out.how = 'shapes';
+      const M = F(x => { let v; try { v = Object.values(x); } catch { return false; } return v.some(f => typeof f === 'function' && f.length === 4 && SHAPE.collectible(f)); });
+      if (M) {
+        const fns = Object.values(M).filter(f => typeof f === 'function');
+        for (const k of missing) { const hit = fns.filter(SHAPE[k]); if (hit.length === 1) out.claim[k] = hit[0]; }
+        out.home ||= fns.find(isHome);
+      }
+    }
+    if (!out.enroll) { out.how = 'shapes'; const E = F(x => { let v; try { v = Object.values(x); } catch { return false; } return v.some(f => typeof f === 'function' && f.length === 2 && isEnroll(f)); }); if (E) out.enroll = Object.values(E).find(f => typeof f === 'function' && f.length === 2 && isEnroll(f)); }
+    out.full = !!(out.enroll && out.home && Object.keys(SHAPE).every(k => out.claim[k]));
+    if (out.how === 'shapes' && !this._dSaid) { this._dSaid = true; this.say(`Discord renamed its quest functions; found them by shape instead (${['enroll', 'home', ...Object.keys(SHAPE)].filter(k => k === 'enroll' ? out.enroll : k === 'home' ? out.home : out.claim[k]).length}/6)`); }
+    return this._d = out;
   },
+  // Reward types on a quest (Discord's own checks compare the same numbers; matched on all 68 quests tested, 24 Nov):
+  // 1 code, 2 in-game item, 3 collectible (avatar decorations...), 4 Orbs, 5 Nitro trial
+  hasReward(q, t) { return !!(q?.config?.rewardsConfig?.rewards || []).some(r => r.type === t); },
   // ---- reading Discord's quest data ----
   // Discord's quest store is called QuestStore (older builds: QuestsStore). We also keep the quests Discord hands over in its own
   // "quests loaded" event, so a wrong store name cannot leave us with an empty list.
@@ -146,16 +185,16 @@ Twilight.definePlugin({
   rewardText(q) { return this.rewards(q).map(r => this.rewardName(r)).join(', ') || 'reward'; },
   // Opens Discord's own claim window for one quest, picked the same way Discord's Claim button picks it. Discord then asks its captcha.
   openClaim(id) {
-    const { R, B } = this.disc(), q = this.store()?.getQuest?.(id), me = Twilight.findStore('UserStore')?.getCurrentUser?.();
+    const d = this.disc(), q = this.store()?.getQuest?.(id), me = Twilight.findStore('UserStore')?.getCurrentUser?.();
     if (!q) throw new Error('Discord has not loaded this quest');
-    if (!R || !B) throw new Error('Discord claim window not found');
-    if (!me?.hasVerifiedEmailOrPhone?.() || (R.ks(q.config) && !me.verified)) throw new Error('verify your email in Discord first');
+    if (!me?.hasVerifiedEmailOrPhone?.() || (this.hasReward(q, 4) && !me.verified)) throw new Error('verify your email in Discord first');
     const LOC = 11; // Discord's "quest home (desktop)"
-    if (R.K9(q.config)) throw new Error('Nitro-trial rewards: claim this one in Discord');
-    if (R.tU(q.config)) B.hJ(q, LOC, LOC);            // avatar decorations and other collectibles
-    else if (R.HG(q.config)) B.cf(q, LOC, LOC);       // in-game items
-    else if (R.ks(q.config)) B.Df(q, LOC, LOC);       // Orbs
-    else B.rx({ quest: q, sourceQuestContent: LOC }); // codes and the rest
+    if (this.hasReward(q, 5)) throw new Error('Nitro-trial rewards: claim this one in Discord');
+    const kind = this.hasReward(q, 3) ? 'collectible' : this.hasReward(q, 2) ? 'inGame' : this.hasReward(q, 4) ? 'orbs' : 'code', open = d.claim[kind];
+    if (!open) { this.openQuestHome(); throw new Error("Discord's claim window was not found: opened the Quests page, claim it there"); }
+    if (kind === 'collectible') open(q, LOC, LOC);       // avatar decorations and other collectibles
+    else if (kind === 'code') open({ quest: q, sourceQuestContent: LOC }); // codes and the rest
+    else open(q, LOC, LOC);                               // in-game items, Orbs
   },
   // One claim from start to end: open Discord's window, then wait until Discord says claimed, says it failed, or you close the window.
   async claim(id) {
@@ -206,10 +245,10 @@ Twilight.definePlugin({
   fresh() { return this.quests().filter(q => !q.userStatus?.enrolledAt && !this.expired(q) && this.taskOf(q)).sort((a, b) => this.byOrder(a, b)); },
   // ---- the work ----
   async enroll(q) {
-    const { D } = this.disc(); let us = null;
-    if (D) { // Discord's own accept (sends the same fields the Accept button does, and updates Discord's list)
-      const r = await D.Oy(q.id, { questContent: 11, questContentCTA: 'ACCEPT_QUEST', sourceQuestContent: 11 });
-      if (r?.type !== D.WM?.SUCCESS && r?.type !== 'success') throw new Error('Discord did not accept it (' + (r?.type ?? '?') + ')');
+    const { enroll } = this.disc(); let us = null;
+    if (enroll) { // Discord's own accept (sends the same fields the Accept button does, and updates Discord's list)
+      const r = await enroll(q.id, { questContent: 11, questContentCTA: 'ACCEPT_QUEST', sourceQuestContent: 11 });
+      if (String(r?.type).toLowerCase() !== 'success') throw new Error('Discord did not accept it (' + (r?.type ?? '?') + ')');
       us = this.store()?.getQuest?.(q.id)?.userStatus;
     } else {
       const r = await this.api().post({ url: `/quests/${q.id}/enroll`, body: { location: 11, is_targeted: false, metadata_sealed: null, traffic_metadata_sealed: this.sealed(q) } }), b = r?.body;
@@ -480,7 +519,7 @@ Twilight.definePlugin({
   },
   // Discord's own "go to the Quests page" (the same call its sidebar entry makes); a plain route change if that is not found.
   openQuestHome() {
-    try { const { B } = this.disc(); if (typeof B?.mA === 'function') return B.mA({ fromContent: 11 }); } catch {}
+    try { const { home } = this.disc(); if (home) return home({ fromContent: 11 }); } catch {}
     Twilight.go('/quest-home');
   },
   // Every quest Discord offers you that is not finished and not expired; quests Twilight cannot do itself (achievement, console) only

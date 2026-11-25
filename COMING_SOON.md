@@ -1,6 +1,6 @@
 # Coming soon
 
 ## Next update
-- **AutoCollapse**: fold long walls of text to a few lines with "Show more" (off until you switch it on).
-- **Edit history**: see every version of an edited message, from the right-click menu or the yellow "edited" tag.
-- Lighter platform icons, and a quest completer that survives Discord updates.
+- **Remind me**: right-click a message to get a reminder about it later.
+- **After-update check**: when Discord updates, Twilight checks itself and tells you if a plugin needs fixing.
+- **Memory trim**: an optional setting that frees up memory while Discord is in the background.

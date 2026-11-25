@@ -6,7 +6,7 @@ Twilight.definePlugin({
   name: 'MessageLogger',
   vs: "Deleted messages vanish and edits overwrite the old text",
   desc: 'Shows deleted messages (red text) and old versions of edited messages (yellow text) in chat, and logs both',
-  LIMIT: 200, HTML_KEEP: 50, HTML_MAX: 30000,
+  LIMIT: 200, HTML_KEEP: 50, HTML_MAX: 30000, HTML_TOTAL: 512 * 1024, // 1.24.0: saved copies never add up to more than 0.5 MB
   keyOf: e => e.at + ':' + e.id,
   // Saved copies live in Twilight.ls.local (Discord deletes window.localStorage after start-up, so a plain localStorage call here
   // silently saved nothing before 1.15.5). Not in settings.json: up to HTML_KEEP x HTML_MAX of HTML would make every settings save heavy.
@@ -27,6 +27,33 @@ Twilight.definePlugin({
     if (!ch && !e.gid && e.guild !== 'DMs') return T.notify('MessageLogger', 'Can not open that channel any more (left the server or no access)', 3500, 'warn');
     const path = `/channels/${e.gid || ch?.guild_id || '@me'}/${e.channel}/${e.id}`;
     T.go(path);
+  },
+  // Every version of one message, oldest first: the text before the first logged edit, each edit, and the delete if it was deleted.
+  history(id) {
+    const es = (Twilight.ls.get('msglog', []) || []).filter(e => e.id === id).sort((a, b) => a.at - b.at), out = [];
+    const edits = es.filter(e => e.type === 'edit');
+    if (edits.length) { out.push({ kind: 'original', text: edits[0].content, at: null }); for (const e of edits) out.push({ kind: 'edit', text: e.now, at: e.at }); }
+    const del = es.find(e => e.type === 'delete'); if (del) { if (!out.length) out.push({ kind: 'original', text: del.content, at: null }); out.push({ kind: 'deleted', text: null, at: del.at }); }
+    return { versions: out, author: es[0]?.author, where: es[0]?.where || es[0]?.channel, guild: es[0]?.guild, entry: es[0] };
+  },
+  // A small floating panel with the history (Escape, the X or a click outside closes it).
+  showHistory(id) {
+    const T = Twilight, H = this.history(id); if (!H.versions.length) return T.notify('Edit history', 'Nothing logged for this message', 2500, 'info');
+    document.querySelector('.tw-hist')?.remove();
+    const box = document.createElement('div'); box.className = 'tw-hist'; box.setAttribute('role', 'dialog');
+    const el = (tag, cls, text) => { const x = document.createElement(tag); if (cls) x.className = cls; if (text != null) x.textContent = text; return x; };
+    const hd = el('div', 'tw-hist-hd'), close = el('div', 'tw-hist-x', '✕'); hd.append(el('b', null, 'Edit history'), el('span', null, ` ${H.author || 'Someone'} · ${H.guild ? H.guild + ' · ' : ''}${H.where || ''}`), close);
+    const list = el('div', 'tw-hist-list');
+    H.versions.forEach((v, i) => {
+      const row = el('div', 'tw-hist-v ' + v.kind), meta = el('div', 'tw-hist-meta', (v.kind === 'original' ? 'Original' : v.kind === 'deleted' ? 'Deleted' : 'Edit ' + i) + (v.at ? ' · ' + new Date(v.at).toLocaleString() : ''));
+      if (v.text != null) { const c = el('span', 'tw-hist-copy', 'copy'); c.onclick = () => navigator.clipboard.writeText(v.text).then(() => T.notify('Copied', 'That version', 1500, 'success')); meta.append(c); }
+      row.append(meta); if (v.text != null) row.append(el('div', 'tw-hist-t', v.text || '(no text)')); list.append(row);
+    });
+    const foot = el('div', 'tw-hist-foot'), jump = el('span', 'tw-hist-copy', '↗ jump to it'); jump.onclick = () => { this.jump(H.entry); off(); }; foot.append(jump);
+    box.append(hd, list, foot); document.body.append(box);
+    const off = () => { box.remove(); document.removeEventListener('keydown', key, true); document.removeEventListener('mousedown', out, true); };
+    const key = e => { if (e.key === 'Escape') { e.stopPropagation(); off(); } }, out = e => { if (!box.contains(e.target)) off(); };
+    close.onclick = off; document.addEventListener('keydown', key, true); setTimeout(() => document.addEventListener('mousedown', out, true), 0);
   },
   clearAll() { Twilight.ls.set('msglog', []); this.htmlSet({}); this.clearGhosts?.(); },
   options: [
@@ -65,6 +92,7 @@ Twilight.definePlugin({
         const r = h('div', { className: 'twd-log tw-jump ' + e.type, title: 'Click to jump to this message', onclick: () => me.jump(e) },
           h('b', { textContent: `${e.type === 'delete' ? 'DELETED' : 'EDITED'} · ${e.author || 'unknown'} · ${e.guild ? e.guild + ' ' : ''}${e.where || e.channel} · ${when}  ` },
             h('span', { textContent: '↗ jump', style: 'color:var(--tw-link,#00a8fc);margin-left:8px' }),
+            ...(e.type === 'edit' ? [h('span', { textContent: '≡ history', style: 'cursor:pointer;color:var(--tw-link,#00a8fc);margin-left:8px', onclick: ev => { ev.stopPropagation(); me.showHistory(e.id); } })] : []),
             h('span', { textContent: '✕ remove', style: 'cursor:pointer;color:#ff8a94;margin-left:8px', onclick: ev => { ev.stopPropagation(); me.drop(e); T.debug.refresh(); } })),
           h('div', { textContent: e.content || '(no text)' }),
           ...(e.type === 'edit' ? [h('div', { className: 'new', textContent: '→ ' + e.now })] : []));
@@ -90,7 +118,19 @@ font:700 10px "Segoe UI",sans-serif;letter-spacing:.12em;text-transform:uppercas
 .tw-synth time{font:12px "gg sans","Segoe UI",sans-serif;color:var(--text-muted,#949ba4);margin-left:8px}.tw-synth .markup_tw{white-space:pre-wrap;word-break:break-word;font-size:16px;line-height:1.375}
 .tw-ghost.tw-edited .tw-tag{background:#ffd23f;color:#1a1500}
 html.tw-nohl .tw-ghost [class*=markup],html.tw-nohl .tw-ghost [class*=messageContent],.tw-ghost.tw-normal [class*=markup],.tw-ghost.tw-normal [class*=messageContent]{color:inherit!important}
-html.tw-nohl .tw-tag,.tw-ghost.tw-normal .tw-tag{display:none!important}`,
+html.tw-nohl .tw-tag,.tw-ghost.tw-normal .tw-tag{display:none!important}
+.tw-ghost.tw-edited .tw-tag{cursor:pointer}
+.tw-hist{position:fixed;z-index:10000;right:24px;top:72px;width:min(440px,calc(100vw - 48px));max-height:70vh;display:flex;flex-direction:column;background:var(--background-floating,var(--background-primary,#2b2d31));color:var(--text-normal,#dbdee1);border:1px solid var(--border-subtle,rgba(255,255,255,.08));border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.4);font:14px var(--font-primary,"gg sans",sans-serif)}
+.tw-hist-hd{display:flex;align-items:baseline;gap:6px;padding:10px 12px;border-bottom:1px solid var(--border-subtle,rgba(255,255,255,.06))}
+.tw-hist-hd span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-muted,#949ba4);font-size:12px}
+.tw-hist-x{cursor:pointer;color:var(--text-muted,#949ba4);padding:0 2px}.tw-hist-x:hover{color:var(--text-normal,#fff)}
+.tw-hist-list{overflow:auto;padding:6px 12px}
+.tw-hist-v{padding:7px 0;border-bottom:1px solid var(--border-subtle,rgba(255,255,255,.05))}.tw-hist-v:last-child{border-bottom:0}
+.tw-hist-meta{font-size:11px;font-weight:700;letter-spacing:.02em;text-transform:uppercase;color:var(--text-muted,#949ba4);display:flex;gap:8px}
+.tw-hist-v.edit .tw-hist-meta{color:#d9b232}.tw-hist-v.deleted .tw-hist-meta{color:#e5444f}
+.tw-hist-t{white-space:pre-wrap;word-break:break-word;margin-top:3px}
+.tw-hist-copy{cursor:pointer;color:var(--text-link,#00a8fc);text-transform:none;font-weight:600;margin-left:auto}.tw-hist-copy:hover{text-decoration:underline}
+.tw-hist-foot{padding:6px 12px 10px;display:flex}`,
     });
     document.documentElement.append(this.css);
     this.syncHl = () => document.documentElement.classList.toggle('tw-nohl', !Twilight.opt('MessageLogger', 'highlight', true));
@@ -122,6 +162,7 @@ html.tw-nohl .tw-tag,.tw-ghost.tw-normal .tw-tag{display:none!important}`,
       if (html && html.length <= this.HTML_MAX) { saved[this.keyOf(entry)] = html; diag.saved++; } else if (html) diag.tooBig = [...diag.tooBig, html.length].slice(-10);
       const live = new Set(keep.slice(0, this.HTML_KEEP).map(this.keyOf));
       for (const k of Object.keys(saved)) if (!live.has(k)) delete saved[k];
+      let total = 0; for (const k of keep.map(this.keyOf)) if (saved[k]) { total += saved[k].length; if (total > this.HTML_TOTAL) delete saved[k]; } // newest kept first
       this.htmlSet(saved); flush();
       if (type === 'delete' && opt('toast', true)) Twilight.notify('Message deleted', `${old.author || 'Someone'}: ${old.content.slice(0, 60)}`, 4000, 'warn');
     };
@@ -131,6 +172,7 @@ html.tw-nohl .tw-tag,.tw-ghost.tw-normal .tw-tag{display:none!important}`,
       g.classList.add('tw-ghost'); g.dataset.twId = id; g.dataset.twKind = kind; g.dataset.twAt = at;
       if (kind === 'edited') g.classList.add('tw-edited');
       const tag = Object.assign(document.createElement('span'), { className: 'tw-tag', textContent: kind }), tm = g.querySelector('h3 time, [class*=header] time');
+      if (kind === 'edited') { tag.title = 'Edit history'; tag.onclick = e => { e.stopPropagation(); this.showHistory(id); }; }
       if (tm) { tag.classList.add('tw-in'); (tm.closest('[class*=timestamp]') || tm).after(tag); } else { const d = document.createElement('div'); d.append(tag); g.append(d); }
     };
     // Copy the message's element next to the original right now; Discord removes the original a moment later. Returns the plain copy's HTML so it can be saved with the log entry.
@@ -217,12 +259,18 @@ html.tw-nohl .tw-tag,.tw-ghost.tw-normal .tw-tag{display:none!important}`,
     };
     this.rt = [1500].map(ms => setTimeout(this.restore, ms));
     this.undo = Twilight.onFlux(this.on, 'MessageLogger');
+    this.offCtx = Twilight.ctx.add('MessageLogger', t => {
+      const g = t.closest?.('.tw-ghost'), li = !g && t.closest?.('li[id^="chat-messages-"]'), id = g?.dataset.twId || (li && /-(\d+)$/.exec(li.id)?.[1]);
+      if (!id) return null;
+      const n = this.history(id).versions.filter(v => v.kind !== 'deleted').length;
+      return n > 1 ? [{ label: `Edit history (${n} versions)`, run: () => this.showHistory(id) }] : null;
+    });
     Twilight.log('MessageLogger: listening for message events');
   },
   stop() {
     if (this._hT) { clearTimeout(this._hT); Twilight.ls.local.set('msghtml', this._html); } // write out what is waiting
-    this.undo?.(); (this.rt || []).forEach(clearTimeout); clearTimeout(this.lmT);
-    this.clearGhosts?.();
+    this.undo?.(); this.offCtx?.(); (this.rt || []).forEach(clearTimeout); clearTimeout(this.lmT);
+    this.clearGhosts?.(); document.querySelector('.tw-hist')?.remove();
     this.css?.remove(); window.removeEventListener('tw-opt', this.onOpt); document.documentElement.classList.remove('tw-nohl');
   },
 });
