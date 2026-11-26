@@ -1,4 +1,4 @@
 # Coming soon
 
 ## Next update
-Nothing announced yet. 1.25.0 just shipped: see What's new.
+- **Platform icons fixed**: they no longer pile up next to some names, and AutoMod alerts no longer show them.

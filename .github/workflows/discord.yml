@@ -1,0 +1,30 @@
+# Posts to the Discord info channels through webhooks. Needs the repository secrets
+# DISCORD_PATCH_NOTES, DISCORD_COMING_SOON and DISCORD_FEATURES (a missing one is skipped).
+name: discord
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [COMING_SOON.md, FEATURES.md, tools/discord-post.js, .github/workflows/discord.yml]
+  workflow_run:
+    workflows: [release]
+    types: [completed]
+permissions:
+  contents: write
+concurrency:
+  group: discord
+jobs:
+  post:
+    if: github.repository == 'Decuwu/twilight-cord-public' && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node tools/discord-post.js
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISCORD_PATCH_NOTES: ${{ secrets.DISCORD_PATCH_NOTES }}
+          DISCORD_COMING_SOON: ${{ secrets.DISCORD_COMING_SOON }}
+          DISCORD_FEATURES: ${{ secrets.DISCORD_FEATURES }}
