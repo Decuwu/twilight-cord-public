@@ -263,7 +263,7 @@ html.tw-nohl .tw-tag,.tw-ghost.tw-normal .tw-tag{display:none!important}
       const g = t.closest?.('.tw-ghost'), li = !g && t.closest?.('li[id^="chat-messages-"]'), id = g?.dataset.twId || (li && /-(\d+)$/.exec(li.id)?.[1]);
       if (!id) return null;
       const n = this.history(id).versions.filter(v => v.kind !== 'deleted').length;
-      return n > 1 ? [{ label: `Edit history (${n} versions)`, run: () => this.showHistory(id) }] : null;
+      return n > 1 ? [{ label: `Edit History (${n} versions)`, icon: 'history', run: () => this.showHistory(id) }] : null;
     });
     Twilight.log('MessageLogger: listening for message events');
   },

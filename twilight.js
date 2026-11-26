@@ -117,7 +117,7 @@ if (process.type === 'browser') {
   const STR = `('(?:[^'\\\\]|\\\\.)*'|"(?:[^"\\\\]|\\\\.)*")`;
   const metaOf = src => {
     const i = src.indexOf('definePlugin('); if (i < 0) return null; const head = src.slice(i, i + 4000), m = {};
-    for (const k of ['name', 'desc', 'vs', 'page', 'group', 'place']) { const r = new RegExp(`\\b${k}:\\s*${STR}`).exec(head); if (r) m[k] = r[1]; }
+    for (const k of ['name', 'desc', 'vs', 'page', 'group', 'place', 'added', 'featured']) { const r = new RegExp(`\\b${k}:\\s*${STR}`).exec(head); if (r) m[k] = r[1]; }
     for (const k of ['devOnly', 'heavy', 'actionOnly']) m[k] = new RegExp(`\\b${k}:\\s*true`).test(head);
     return m.name ? m : null;
   };
@@ -133,7 +133,7 @@ if (process.type === 'browser') {
       // plugins with menu actions while off (actionOnly) always load; everything else that is off waits until it is switched on
       if (m && !m.actionOnly && (offList.has((0, eval)(m.name)) || (m.devOnly && !onList.has((0, eval)(m.name))))) {
         sizes[(0, eval)(m.name)] = src.length;
-        return `Twilight.definePlugin({lazy:${JSON.stringify(name(n))},name:${m.name}${['desc', 'vs', 'page', 'group', 'place'].map(k => m[k] ? `,${k}:${m[k]}` : '').join('')}${m.devOnly ? ',devOnly:true' : ''}${m.heavy ? ',heavy:true' : ''}});`;
+        return `Twilight.definePlugin({lazy:${JSON.stringify(name(n))},name:${m.name}${['desc', 'vs', 'page', 'group', 'place', 'added', 'featured'].map(k => m[k] ? `,${k}:${m[k]}` : '').join('')}${m.devOnly ? ',devOnly:true' : ''}${m.heavy ? ',heavy:true' : ''}});`;
       }
       sizes[m ? (0, eval)(m.name) : name(n)] = src.length;
       return `try{\n${src}\n}catch(e){console.error("[twilight] plugin ${name(n)}",e)}`;

@@ -10,6 +10,7 @@
 // everything you click is translated into that one instead.
 Twilight.definePlugin({
   name: 'Translate',
+  featured: 'Says which language and translator',
   vs: 'Discord has no built-in translation',
   desc: 'Translate messages you read (button in the hover bar) and, if you like, the ones you send (文A button or /translate)',
   LANG: { en: 'English', es: 'Spanish', fr: 'French', de: 'German', pt: 'Portuguese', it: 'Italian', nl: 'Dutch', pl: 'Polish', ru: 'Russian', tr: 'Turkish', ar: 'Arabic', hi: 'Hindi', ja: 'Japanese', ko: 'Korean', 'zh-CN': 'Chinese' },
@@ -124,21 +125,27 @@ Twilight.definePlugin({
         else if (!v.auto) T.notify('Translate', 'Pick a language for what you send, or auto: Start / Disable for new messages', 4000, 'info');
       } });
     me.warned = false; me.cache = new Map(); me.done = 0; me.placed = null; me.tried = 0; me.busy = new Set();
-    me.css = Object.assign(document.createElement('style'), { textContent: '.tw-tr{margin-top:2px;font:400 12px/1.3 "gg sans","Segoe UI",sans-serif;color:var(--text-muted,#8aa6bf);opacity:.9;white-space:pre-wrap}.tw-tr b{font-weight:600;opacity:.7}.tw-trwrap{display:contents}.tw-trbtn{cursor:pointer;display:flex;align-items:center;justify-content:center}.tw-trbtn svg{width:20px;height:20px;fill:currentColor}.tw-trbtn.on{color:var(--brand-500,#5b9dff)}' });
+    me.css = Object.assign(document.createElement('style'), { textContent: '.tw-tr{margin-top:2px;font:400 12px/1.3 "gg sans","Segoe UI",sans-serif;color:var(--text-muted,#8aa6bf);opacity:.9;white-space:pre-wrap}.tw-tr b{font-weight:600;opacity:.7}.tw-tr .tw-tr-logo{display:inline-flex;vertical-align:-2px;margin:0 5px 0 5px}.tw-tr .tw-tr-logo svg{display:block}.tw-trwrap{display:contents}.tw-trbtn{cursor:pointer;display:flex;align-items:center;justify-content:center}.tw-trbtn svg{width:20px;height:20px;fill:currentColor}.tw-trbtn.on{color:var(--brand-500,#5b9dff)}' });
     document.documentElement.append(me.css);
     const ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/></svg>';
     me.outButton();
     const meId = () => T.findStore('UserStore')?.getCurrentUser?.()?.id;
     let names; try { names = new Intl.DisplayNames(['en'], { type: 'language' }); } catch {}
     const langName = c => { try { return c && names?.of(c) || c || ''; } catch { return c || ''; } };
-    // Small subtext under the message: "translated from French · hello" (errors and "already in…" notes have no label).
-    const note = (li, text, err, from) => {
+    // Small subtext under the message: "Japanese [G] • hello", with the logo of the translator that answered (Google or DeepL).
+    // Errors and "already in…" notes have no label.
+    const LOGO = {
+      google: '<svg viewBox="0 0 24 24" width="12" height="12" aria-label="Google"><path fill="#4285F4" d="M22.6 12.3c0-.8-.1-1.5-.2-2.2H12v4.2h6a5.1 5.1 0 0 1-2.2 3.4v2.8h3.6c2.1-2 3.2-4.8 3.2-8.2Z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.4-2.7l-3.6-2.8c-1 .7-2.3 1.1-3.8 1.1a6.6 6.6 0 0 1-6.2-4.6H2.1v2.9A11 11 0 0 0 12 23Z"/><path fill="#FBBC05" d="M5.8 14c-.2-.7-.3-1.3-.3-2s.1-1.4.3-2V7.1H2.1a11 11 0 0 0 0 9.8L5.8 14Z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.3 1.7l3.2-3.2A11 11 0 0 0 2.1 7.1L5.8 10A6.6 6.6 0 0 1 12 5.4Z"/></svg>',
+      deepl: '<svg viewBox="0 0 24 24" width="12" height="12" aria-label="DeepL"><path fill="#0F2B46" d="M3.5 5.6 11 1.3a2 2 0 0 1 2 0l7.5 4.3a2 2 0 0 1 1 1.7v8.6a2 2 0 0 1-1 1.7l-5.3 3.1.1 3-3.4-2-2.9 1.7a2 2 0 0 1-2 0l-3.5-2a2 2 0 0 1-1-1.8V7.3a2 2 0 0 1 1-1.7Z"/><circle cx="9" cy="9" r="1.6" fill="#fff"/><circle cx="15.5" cy="12" r="1.6" fill="#fff"/><circle cx="9" cy="15" r="1.6" fill="#fff"/><path stroke="#fff" stroke-width="1.1" d="M9 9l6.5 3L9 15"/></svg>',
+    };
+    const note = (li, text, err, from, engine) => {
       const el = li.querySelector('[id^="message-content-"]'); if (!el) return;
       li.querySelector('.tw-tr')?.remove();
       const d = document.createElement('div'); d.className = 'tw-tr';
-      if (!err) { const b = document.createElement('b'); b.textContent = from ? `translated from ${langName(from)} · ` : 'translated · '; d.append(b); }
+      if (!err) { const b = document.createElement('b'); b.className = 'tw-tr-hd'; b.textContent = from ? langName(from) : 'Translated'; const lg = document.createElement('span'); lg.className = 'tw-tr-logo'; lg.title = engine === 'deepl' ? 'Translated by DeepL' : 'Translated by Google'; lg.innerHTML = LOGO[engine === 'deepl' ? 'deepl' : 'google']; d.append(b, lg, document.createTextNode('• ')); }
       d.append(text); if (err) d.style.opacity = '.6'; el.after(d);
     };
+    me.note = note; // also used by the right-click "Translate this message" (MessageMenu)
     // Translate the message in this row, or hide its translation when it is already showing.
     const run = T.timed('Translate', async (li, btn) => {
       const info = T.msgScan.info(li), el = li.querySelector('[id^="message-content-"]');
@@ -152,11 +159,11 @@ Twilight.definePlugin({
           const engine = T.opt('Translate', 'engine', 'google') === 'deepl' ? 'deepl' : 'google', r = await T.cmd({ type: 'translate', text: text.slice(0, 1500), to, engine, key: engine === 'deepl' ? T.ls.get('deeplKey', '') : undefined }, 15000);
           if (r?.fellBack && !me.warned) { me.warned = true; T.notify('Translate', `DeepL did not answer (${r.fellBack}), used Google`, 4500, 'warn'); }
           if (!r || r.error) { note(li, 'Could not translate: ' + String(r?.error || 'no answer').slice(0, 80), true); return; }
-          me.cache.set(key, { text: r.from === to || !r.text || r.text.trim() === text ? '' : r.text, from: r.from });
+          me.cache.set(key, { text: r.from === to || !r.text || r.text.trim() === text ? '' : r.text, from: r.from, engine: r.engine });
           if (me.cache.size > 40) me.cache.delete(me.cache.keys().next().value);
         }
-        const { text: t, from } = me.cache.get(key);
-        note(li, t || 'Already in the language you translate into', !t, from); btn?.classList.add('on'); if (t) me.done++;
+        const { text: t, from, engine: eng } = me.cache.get(key);
+        note(li, t || 'Already in the language you translate into', !t, from, eng); btn?.classList.add('on'); if (t) me.done++;
       } catch (e) { note(li, 'Could not translate', true); } finally { me.busy.delete(key); }
     });
     // The hover bar is made by Discord when you point at a message: add our button to it (left of the add-reaction smiley).
@@ -222,7 +229,7 @@ Twilight.definePlugin({
       const r = await T.cmd({ type: 'translate', text: text.slice(0, 1500), to, engine, key: engine === 'deepl' ? T.ls.get('deeplKey', '') : undefined }, 15000).catch(() => null);
       if (r && r.text && !r.error) { // show what we got even when this was the last one before a limit
         me.fails = 0;
-        if (r.from !== to && r.text.trim() !== text && li.isConnected && !li.querySelector('.tw-tr')) { note(li, r.text, false, r.from); me.done++; me.auto++; }
+        if (r.from !== to && r.text.trim() !== text && li.isConnected && !li.querySelector('.tw-tr')) { note(li, r.text, false, r.from, r.engine); me.done++; me.auto++; }
       } else if (!r?.limited && ++me.fails >= 5) return stopLimited('the translator is not answering');
       if (r?.limited) stopLimited(`${engine === 'deepl' ? 'DeepL' : 'Google'} is rate limiting${r.fellBack ? ' (' + String(r.fellBack).slice(0, 40) + ')' : ''}`);
     };

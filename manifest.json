@@ -1,5 +1,5 @@
 {
-  "version": "1.24.0",
+  "version": "1.25.0",
   "files": [
     "core.js",
     "debug.js",
@@ -29,6 +29,12 @@
     "plugins/typingSpeed.js",
     "plugins/welcomeHint.js",
     "plugins/viewIcons.js",
+    "plugins/notes.js",
+    "plugins/linkCheck.js",
+    "plugins/jumpTop.js",
+    "plugins/memberCount.js",
+    "plugins/betterCodeblocks.js",
+    "plugins/updateCheck.js",
     "assets/petpet.js",
     "twilight.js",
     "themes/midnight.css",

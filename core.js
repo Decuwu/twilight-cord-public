@@ -411,32 +411,103 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
   const assetP = {};
   const ctxFns = new Map(); let ctxLast = null, ctxMO, ownMenu;
   const closeOwn = () => { ownMenu?.remove(); ownMenu = null; };
-  const itemsFor = t => { const out = []; for (const [k, f] of ctxFns) { try { const r = f(t); if (r?.length) out.push(...r); } catch (e) { console.warn('[twilight] menu', k, e); } } return out; };
+  const itemsFor = t => { const out = []; for (const [k, f] of ctxFns) { try { const r = f(t); if (r?.length) for (const it of r) out.push({ ...it, grp: k }); } catch (e) { console.warn('[twilight] menu', k, e); } } return out; };
+  // Icons in the same 24px box as Discord's own. Drawn as lines (fill kept off inline, so Discord's hover rule that recolours
+  // icon fills cannot flood them); they take the row's colour like the native ones.
+  const ICONS = {
+    copy: ['M9 9h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z', 'M4 15a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2'],
+    markdown: ['M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Z', 'M6 15V9l2.5 3L11 9v6', 'M16 9v6', 'M14 13l2 2 2-2'],
+    link: ['M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7', 'M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7'],
+    bell: ['M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9', 'M10.3 21a2 2 0 0 0 3.4 0'],
+    translate: ['M3 5h11', 'M8.5 3v2', 'M12 5c-1 5-4.5 8.5-8 10', 'M5.5 9c1.2 2.4 3.3 4.6 6 6', 'M13 21l4.5-10 4.5 10', 'M14.5 18h6'],
+    note: ['M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z', 'M14 2v6h6', 'M8 13h8', 'M8 17h5'],
+    unnote: ['M6 2h8l6 6v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z', 'M14 2v6h6', 'M8 15h8'],
+    history: ['M3 12a9 9 0 1 0 2.6-6.4L3 8', 'M3 3v5h5', 'M12 7v5l3.5 2'],
+    trash: ['M3 6h18', 'M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2', 'M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6', 'M10 11v6', 'M14 11v6'],
+    eye: ['M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z', 'M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z'],
+    add: ['M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z', 'M12 8v8', 'M8 12h8'],
+    download: ['M12 3v12', 'M7 10l5 5 5-5', 'M4 21h16'],
+    id: ['M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z', 'M8 9v6', 'M12 9v6h1.5a3 3 0 0 0 0-6H12Z'],
+    spark: ['M12 3l2.2 6.8L21 12l-6.8 2.2L12 21l-2.2-6.8L3 12l6.8-2.2Z'],
+  };
+  const svgIcon = (name, cls) => {
+    const NS = 'http://www.w3.org/2000/svg', s = document.createElementNS(NS, 'svg');
+    for (const [k, v] of Object.entries({ class: cls || '', 'aria-hidden': 'true', role: 'img', width: '24', height: '24', viewBox: '0 0 24 24', fill: 'none' })) s.setAttribute(k, v);
+    for (const d of ICONS[name] || ICONS.spark) { const p = document.createElementNS(NS, 'path'); p.setAttribute('d', d); p.setAttribute('style', 'fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round'); s.append(p); }
+    return s;
+  };
+  // While the pointer is on one of our rows, Discord's last-hovered native row keeps its highlight (it only moves it between its
+  // own rows), so that highlight is muted until the pointer is back on a native row.
+  let ctxCss;
+  const ctxStyle = () => ctxCss ||= document.head.appendChild(Object.assign(document.createElement('style'), { id: 'tw-ctx-css', textContent:
+    '[role="menu"]:has(.tw-ctx-item:hover) [role="menuitem"][class*="focused_"]:not(.tw-ctx-item){background-color:transparent!important;color:var(--interactive-text-default)!important}' +
+    '[role="menu"]:has(.tw-ctx-item:hover) [role="menuitem"][class*="focused_"]:not(.tw-ctx-item) path{fill:currentColor!important}' }));
   const injectItems = (menu, items) => {
     if (menu.querySelector('[data-tw-ctx]')) return;
-    const first = menu.querySelector('[role="menuitem"]'), lab = first?.querySelector('[class*="label"]');
-    const sep = menu.querySelector('[role="separator"]');
-    const wrap = el('div'); wrap.dataset.twCtx = '1'; wrap.setAttribute('role', 'group');
-    if (sep) wrap.append(sep.cloneNode(true));
-    const hd = el('div', window.Twilight.brand().name); hd.style.cssText = 'padding:6px 8px 2px;font:700 11px "gg sans","Segoe UI",sans-serif;letter-spacing:.04em;text-transform:uppercase;color:var(--channels-default,#949ba4);user-select:none'; wrap.append(hd);
+    ctxStyle();
+    const rows = [...menu.querySelectorAll('[role="menuitem"]')].filter(e => e.querySelector('[class*="label_"]'));
+    // A plain native row to copy: icon on the left (Discord's current menus), not red, not a submenu. Older-style menus (icon on
+    // the right or none) are copied as they are, so our rows always match the menu they sit in.
+    const plain = e => !/colorDanger_|focused_/.test(e.className) && !e.hasAttribute('aria-haspopup') && !e.querySelector('input,[class*="checkbox"]');
+    const tpl = rows.find(e => plain(e) && e.querySelector('[class*="iconContainerLeft"] svg')) || rows.find(plain) || rows[0];
+    const sfx = tpl?.className.match(/\bitem_(\w+)/)?.[1], focusC = sfx && 'focused_' + sfx, dangerC = sfx && 'colorDanger_' + sfx;
+    const svgCls = tpl?.querySelector('svg')?.getAttribute('class') || '';
+    const sepT = menu.querySelector('[role="separator"]');
+    const sep = () => { if (sepT) return sepT.cloneNode(true); const s = document.createElement('div'); s.setAttribute('role', 'separator'); s.style.cssText = 'height:1px;margin:4px 8px;background:var(--background-mod-normal,rgba(255,255,255,.08))'; return s; };
+    const close = () => { document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); closeOwn(); };
+    const mkRow = it => {
+      let row;
+      if (tpl) {
+        row = tpl.cloneNode(true);
+        for (const a of ['id', 'aria-expanded', 'aria-haspopup', 'aria-describedby', 'aria-checked', 'data-menu-item', 'data-marquee-active']) row.removeAttribute(a);
+        row.className = row.className.split(/\s+/).filter(c => !/^(focused_|colorDanger_|disabled_)/.test(c)).join(' ');
+        const txt = row.querySelector('[class*="label_"] [class*="text_"]') || row.querySelector('[class*="label_"]');
+        txt.textContent = it.label;
+        row.querySelector('[class*="subtext_"]')?.remove();
+        const left = row.querySelector('[class*="iconContainerLeft"]');
+        // Right-hand slot: a submenu caret or a native icon. Our rows have no submenus, so in left-icon menus it goes; in
+        // right-icon menus our icon goes there instead.
+        const right = [...row.querySelectorAll('[class*="iconContainer"]')].find(e => e !== left);
+        if (left) { left.replaceChildren(svgIcon(it.icon, svgCls)); right?.remove(); }
+        else if (right) right.replaceChildren(svgIcon(it.icon, svgCls));
+        if (it.danger && dangerC) row.classList.add(dangerC);
+      } else {
+        row = el('', it.label); row.setAttribute('role', 'menuitem');
+        row.style.cssText = 'padding:6px 8px;cursor:pointer;color:var(--interactive-text-default);font:500 14px "gg sans","Segoe UI",sans-serif';
+      }
+      row.classList.add('tw-ctx-item'); row.tabIndex = -1;
+      if (focusC) { row.addEventListener('mouseenter', () => row.classList.add(focusC)); row.addEventListener('mouseleave', () => row.classList.remove(focusC)); }
+      row.addEventListener('click', e => { e.stopPropagation(); try { it.run(); } catch (err) { console.warn('[twilight] menu item', err); } close(); });
+      return row;
+    };
+    // One native-style group per plugin, each behind a separator, like Discord's own sections. No header, no badges.
+    const wrap = document.createElement('div'); wrap.dataset.twCtx = '1';
+    let grp = null, box = null;
     for (const it of items) {
-      const row = document.createElement('div'); row.setAttribute('role', 'menuitem'); row.tabIndex = -1;
-      row.className = (first?.className || '') + ' tw-ctx-item';
-      const span = document.createElement('div'); span.className = lab?.className || ''; span.textContent = '✦ ' + it.label;
-      if (!first) row.style.cssText = 'padding:6px 10px;cursor:pointer;color:#cfe3f3;font:500 14px "gg sans","Segoe UI",sans-serif';
-      row.append(span);
-      row.addEventListener('click', e => { e.stopPropagation(); try { it.run(); } catch (err) { console.warn('[twilight] menu item', err); } document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); closeOwn(); });
-      wrap.append(row);
+      if (it.grp !== grp) { grp = it.grp; wrap.append(sep()); box = document.createElement('div'); box.setAttribute('role', 'group'); wrap.append(box); }
+      box.append(mkRow(it));
     }
-    // Under Discord's own buttons: add to the list that holds the native items (a side-by-side column would appear if added to the outer menu).
-    const host = first?.closest('[role="group"]')?.parentElement || first?.parentElement || menu;
+    // Under Discord's own buttons, inside the list that holds them (adding to the outer menu would make a side-by-side column).
+    const host = tpl?.closest('[role="group"]')?.parentElement || menu.querySelector('[class*="scroller"]') || menu;
     host.append(wrap);
   };
+  // Our own menu (only when Discord opens none): drawn in Discord's menu colours so it looks like one.
   const showOwn = (items, x, y) => {
-    closeOwn();
-    ownMenu = el('div'); ownMenu.id = 'tw-ownmenu';
-    ownMenu.style.cssText = `position:fixed;z-index:2147483645;min-width:200px;padding:6px;border-radius:8px;background:rgba(6,12,22,.94);backdrop-filter:blur(14px);border:1px solid rgba(108,200,255,.28);box-shadow:0 12px 36px rgba(0,0,0,.6);font:600 13px "gg sans","Segoe UI",sans-serif;color:#d2e6f5`;
-    for (const it of items) { const r = el('div', it.label); r.style.cssText = 'padding:7px 10px;border-radius:5px;cursor:pointer'; r.onmouseenter = () => r.style.background = 'rgba(108,200,255,.18)'; r.onmouseleave = () => r.style.background = ''; r.onclick = () => { closeOwn(); try { it.run(); } catch {} }; ownMenu.append(r); }
+    closeOwn(); ctxStyle();
+    ownMenu = el(''); ownMenu.id = 'tw-ownmenu'; ownMenu.setAttribute('role', 'menu');
+    ownMenu.style.cssText = 'position:fixed;z-index:2147483645;min-width:188px;padding:6px 8px;border-radius:8px;background:var(--background-surface-highest,var(--background-floating,#111214));border:1px solid var(--border-subtle,rgba(255,255,255,.06));box-shadow:var(--shadow-high,0 8px 16px rgba(0,0,0,.24));font:500 14px/18px "gg sans","Segoe UI",sans-serif;color:var(--interactive-text-default,#b5bac1)';
+    let grp = null;
+    for (const it of items) {
+      if (grp !== null && it.grp !== grp) ownMenu.append(Object.assign(el(''), { style: 'height:1px;margin:4px 0;background:var(--background-mod-normal,rgba(255,255,255,.08))' }));
+      grp = it.grp;
+      const r = el(''), lab = el('', it.label), ic = svgIcon(it.icon, ''); ic.style.cssText = 'width:18px;height:18px;flex:none';
+      r.style.cssText = `display:flex;align-items:center;gap:8px;padding:8px;border-radius:4px;cursor:pointer;${it.danger ? 'color:var(--text-feedback-critical,#f23f43)' : ''}`;
+      lab.style.color = it.danger ? 'inherit' : 'var(--text-strong,#f2f3f5)';
+      r.append(ic, lab);
+      r.onmouseenter = () => r.style.background = it.danger ? 'var(--background-feedback-mod-critical,rgba(242,63,67,.1))' : 'var(--interactive-background-hover,rgba(255,255,255,.06))'; r.onmouseleave = () => r.style.background = '';
+      r.onclick = () => { closeOwn(); try { it.run(); } catch {} };
+      ownMenu.append(r);
+    }
     document.body.append(ownMenu);
     const b = ownMenu.getBoundingClientRect(); ownMenu.style.left = Math.max(4, Math.min(x, innerWidth - b.width - 4)) + 'px'; ownMenu.style.top = Math.max(4, Math.min(y, innerHeight - b.height - 4)) + 'px';
   };
@@ -505,7 +576,8 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
       if (!/^\d{5,25}$/.test(channelId) || !text.trim() || text.length > 2000) return { error: 'bad channel or text' };
       const has = (...k) => find(x => (typeof x === 'object' || typeof x === 'function') && k.every(y => y in x)), m = sendMod ||= has('sendMessage', 'receiveMessage') || has('sendMessage');
       if (!m) return { error: 'no sendMessage module' };
-      try { window.Twilight._ownSend = true; await m.sendMessage(channelId, { content: text, tts: false, invalidEmojis: [], validNonShortcutEmojis: [] }, undefined, {}); }
+      // 1.25.0: Discord's sendMessage can wait forever for a chat that was never opened, so give up after 15 s instead of hanging the caller.
+      try { window.Twilight._ownSend = true; await Promise.race([m.sendMessage(channelId, { content: text, tts: false, invalidEmojis: [], validNonShortcutEmojis: [] }, undefined, {}), new Promise((_, no) => _st(() => no(new Error('timed out: open that chat once, then try again')), 15000))]); }
       catch (e) { return { error: String(e?.message || e).slice(0, 100) }; } finally { window.Twilight._ownSend = false; }
       if (!opts.quiet) try { plugins.get('Assistant')?.say?.(channelId, '*Sent:* ' + text.slice(0, 200)); } catch {}
       return { ok: true };
@@ -620,6 +692,15 @@ html[data-tw-lite][data-tw-main] *{backdrop-filter:none!important;-webkit-backdr
           clearTimeout(trimT);
           if (document.hidden && ls.get('slimTrim', false)) trimT = setTimeout(() => { try { window.DiscordNative?.processUtils?.purgeMemory?.(); cost.trims = (cost.trims || 0) + 1; } catch {} }, 60000);
         });
+        // "Trim now" (menu > Discord > Performance): the same trim straight away, measured. RAM of all of Discord's processes before and
+        // a few seconds after, so the menu can say how much came back.
+        window.Twilight.trimNow = async () => {
+          const ram = async () => { const m = await window.Twilight.cmd({ type: 'metrics' }, 30000); return m?.apps?.[m.self]?.ramMB ?? null; };
+          const before = await ram(); try { window.DiscordNative?.processUtils?.purgeMemory?.(); cost.trims = (cost.trims || 0) + 1; } catch {}
+          await new Promise(r => _st(r, 5000)); const after = await ram();
+          const freed = before != null && after != null ? Math.max(0, Math.round(before - after)) : null; cost.trimFreed = (cost.trimFreed || 0) + (freed || 0);
+          return { before, after, freed };
+        };
         try { window.Twilight.debug?.init(opts); } catch (e) { console.error('[twilight] debug', e); }
         console.log(`[twilight] started v${opts.version}: ${[...plugins.keys()].filter(n => !isOff(n)).join(', ')} | settings storage: ${ls.persistent() ? 'saved' : 'memory only'}`);
         setTimeout(() => { grab(); console.log(`[twilight] webpack ready: ${!!wreq}, modules: ${wreq ? Object.keys(wreq.c).length : 0}`); }, 8000);

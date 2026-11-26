@@ -33,6 +33,7 @@ Twilight.definePlugin({
     const T = Twilight; let ok = true;
     try {
       const probe = this.capture(); probe.selfTest = await this.selfTest(); probe.cost = T.cost || null;
+      probe.versions = this.versions(); probe.changes = this.compare(probe.selfTest);
       probe.settingsFile = T.ls?.file?.() || null;
       const r = await T.cmd({ type: 'report', name: 'probe.json', text: JSON.stringify(probe, null, 1) }, 8000); ok = ok && !!r?.ok;
     } catch (e) { ok = false; T.log('Probe: report failed ' + (e?.message || e)); }
@@ -42,13 +43,34 @@ Twilight.definePlugin({
     } catch { ok = false; }
     return ok;
   },
+  // Which Twilight, Discord and Electron this report came from.
+  versions() {
+    const ua = navigator.userAgent, v = re => (re.exec(ua) || [])[1] || null;
+    let host = null; try { host = window.DiscordNative?.app?.getVersion?.() || null; } catch {}
+    return { twilight: Twilight.debug?.version || null, discord: host, channel: window.GLOBAL_ENV?.RELEASE_CHANNEL || null, build: window.GLOBAL_ENV?.SENTRY_TAGS?.buildId || null, electron: v(/Electron\/([\d.]+)/), chrome: v(/Chrome\/([\d.]+)/) };
+  },
+  // Compares a self-test with the last one saved: what newly broke and what got fixed (skipped checks count as neither).
+  bad: v => v === 'FAIL' || /^(ERROR|FAIL)/.test(String(v)),
+  compare(now, save = true) {
+    const T = Twilight, prev = T.ls.get('probeLast', null), out = { since: prev?.at || null, broke: [], fixed: [], before: prev?.versions || null };
+    if (prev?.res) for (const k of Object.keys(now)) { const a = this.bad(prev.res[k]), b = this.bad(now[k]); if (b && !a && k in prev.res) out.broke.push(k); if (a && !b && !/^skipped/.test(String(now[k]))) out.fixed.push(k); }
+    if (save) T.ls.set('probeLast', { at: Date.now(), versions: this.versions(), res: Object.fromEntries(Object.entries(now).map(([k, v]) => [k, this.bad(v) ? 'FAIL' : /^skipped/.test(String(v)) ? 'skipped' : 'ok'])) });
+    return out;
+  },
   async selfTest() {
     const T = Twilight, out = {}, t = async (k, f) => { try { const v = await f(); out[k] = v === false ? 'FAIL' : v === undefined ? 'ok' : v; } catch (e) { out[k] = 'ERROR ' + (e?.message || e); } };
     await t('dispatcher', () => !!T.dispatcher());
     for (const n of ['UserStore', 'ChannelStore', 'GuildStore', 'SelectedGuildStore', 'SelectedChannelStore', 'PermissionStore', 'RelationshipStore', 'UserGuildSettingsStore', 'ReadStateStore', 'StickersStore', 'EmojiStore', 'MessageStore']) await t('store:' + n, () => !!T.findStore(n));
     await t('rest', () => !!T.find(m => typeof m?.post === 'function' && typeof m.get === 'function' && typeof m.getAPIBaseURL === 'function'));
     await t('ignoredIds', () => { const r = T.findStore('RelationshipStore'); return r ? ['getIgnoredIDs', 'getFriendIDs', 'getRelationships', 'isIgnored'].filter(k => typeof r[k] === 'function').join(',') || 'FAIL' : 'FAIL'; });
-    for (const [k, s] of Object.entries({ textbox: '[role="textbox"][contenteditable="true"]', guilds: '[class*="guilds_"]', channelList: '[data-list-id="channels"]', userSettings: '[role="tablist"]' })) await t('dom:' + k, () => !!document.querySelector(s));
+    // 1.25.0: page checks only count where that part of Discord is on screen (the chat box and messages need an open chat, the channel
+    // list needs a server), so a check run on the Quests or Friends page no longer shows false fails.
+    const chId = T.findStore('SelectedChannelStore')?.getChannelId?.(), inGuild = !!T.findStore('SelectedGuildStore')?.getGuildId?.(), chatOpen = !!chId && /^\/channels\/[^/]+\/\d+/.test(location.pathname);
+    const skip = why => 'skipped (' + why + ')';
+    await t('dom:textbox', () => chatOpen ? !!document.querySelector('[role="textbox"][contenteditable="true"]') : skip('no chat open'));
+    await t('dom:guilds', () => !!document.querySelector('[class*="guilds_"]'));
+    await t('dom:channelList', () => inGuild ? !!document.querySelector('[data-list-id="channels"]') : skip('not in a server'));
+    await t('dom:userSettings', () => !!document.querySelector('[role="tablist"]') || skip('settings closed'));
     await t('plugins', () => [...T.plugins.keys()].length);
     await t('fn:unignoreUser', () => !!T.findByProps('unignoreUser'));
     await t('fn:removeRelationship', () => !!T.findByProps('removeRelationship'));
@@ -57,7 +79,7 @@ Twilight.definePlugin({
     await t('store:PresenceStore', () => !!T.findStore('PresenceStore'));
     await t('store:VoiceStateStore', () => !!T.findStore('VoiceStateStore'));
     await t('messageStore.getMessages', () => typeof T.findStore('MessageStore')?.getMessages === 'function');
-    await t('dom:messageLi', () => !!document.querySelector('li[id^="chat-messages-"]'));
+    await t('dom:messageLi', () => chatOpen ? !!document.querySelector('li[id^="chat-messages-"]') || skip('chat is empty') : skip('no chat open'));
     await t('dom:video', () => document.querySelectorAll('video').length);
     await t('sandbox', async () => await T.plugins.get('Generated')?.sandboxTest?.() ?? 'plugin off');
     await t('translate', async () => { const r = await T.cmd({ type: 'translate', text: 'hola mundo', to: 'en' }, 12000); return r && !r.error ? r : 'FAIL ' + JSON.stringify(r); });

@@ -2,6 +2,7 @@
 // Shown in chat message headers, the member list and the direct messages list. The icons are drawn here (no emoji).
 Twilight.definePlugin({
   name: 'PlatformIndicators',
+  featured: 'Much lighter: only redraws who changed',
   heavy: true,
   vs: 'You cannot see which device someone is on',
   desc: 'Desktop / phone / web icons next to names in chat, the member list and DMs',

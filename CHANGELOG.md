@@ -1,5 +1,29 @@
 # Twilight-Cord changelog
 
+## 1.25.0
+**New**
+- **Notes**: right-click any message > **Save to Notes**. Notes has its own page in the menu (Local > Notes) with little page tabs: **+** adds a page, double-click a tab to rename it. Search, Copy, Jump to the message and remove. A copy of the text is kept, so a note survives the message being deleted.
+- **LinkCheck**: a link whose text shows one website (like `discord.com/nitro`) but opens another folds away like an ignored message: "1 suspicious link — Show message". Open it to see where the link really goes, in orange.
+- **Top ^**: a small button above the right-hand end of the message box jumps to the very first message of the chat, in one click.
+- **MemberCount**: the member and online count at the top of a server's member list.
+- **BetterCodeblocks**: a small header on each code block with its language and line count.
+- **UpdateCheck**: after Discord updates itself, Twilight checks it still fits and tells you in one popup: all good, or which plugin broke. Run it by hand any time in Tools.
+- **Add to server**: right-click an emoji or sticker > **Add to server…** to put it on any server where you can add them. (Back after a test proved the upload really works.)
+
+**Better**
+- **Plugins page**: show All, **New** (added in the last two updates), **Featured** (big improvements or fixes), Enabled or Disabled. New and improved plugins carry a badge.
+- **AutoCollapse**: type your own character limit, or keep using the presets.
+- **Translate**: the line under a message now reads "Japanese [Google logo] • translation", with the logo of the translator that answered (Google or DeepL).
+- **RoleDividers**: each role heading is one line again ("OWNER — 1" with the divider running off to the right) instead of breaking into three.
+- Right-click a restored message: **Remove deleted message highlight** / **Remove edited message highlight**.
+- **Quests**: clicking **N to claim** in the top bar opens the claim window for one reward.
+- **Remind me**: a due reminder now also shows a Windows notification; click it to jump to the message. New "Tonight 8pm" choice.
+- **Trim memory now** (Discord > Performance): trims Discord's memory straight away and says how many MB came back.
+
+**Fixed**
+- **AutoCollapse**: on replies, **Show more / Show less** now sits below the shortened message, not up in the quoted preview, and the preview is no longer folded.
+- Self-test: checks for the chat box, channel list and messages are skipped when that part of Discord is not on screen, so they no longer show as fails.
+
 ## 1.24.0
 **New**
 - **AutoCollapse** (off until you switch it on, in Plugins): long walls of text fold to a few lines with "Show more" / "Show less". Choose how long counts as long, how many lines stay visible, and whether your own messages fold too. It decides from the message text itself, so it adds no work to how the page is drawn.

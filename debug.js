@@ -141,13 +141,17 @@ background:linear-gradient(135deg,transparent 50%,rgba(255,255,255,.55) 50%,rgba
         })(),
       ];
     },
+    // 1.25.0: show All (by group), New (added in the last two updates), Featured (big improvements or fixes), Enabled or Disabled.
     Plugins() {
       if (!T.plugins.size) return [h('div', { className: 'twd-out', textContent: 'No plugins loaded.' })];
-      const nodes = [];
-      for (const [g, list] of byGroup([...T.plugins.values()].filter(p => !p.actionOnly && !p.hidden && !isDevPlugin(p)))) { // action-only plugins live in the Tools page
-        nodes.push(sec(g));
-        for (const p of list) nodes.push(ledRow(p.name, !T.isOff(p.name), () => flipPlugin(p), p.desc), ...optionRows(p));
-      }
+      const all = [...T.plugins.values()].filter(p => !p.actionOnly && !p.hidden && !isDevPlugin(p)); // action-only plugins live in the Tools page
+      const mode = T.ls.get('pluginSort', 'All'), MODES = { All: () => true, New: isNew, Featured: p => !!p.featured, Enabled: p => !T.isOff(p.name), Disabled: p => T.isOff(p.name) };
+      const chips = h('div', { className: 'twd-chips' }, ...Object.keys(MODES).map(k => { const n = all.filter(MODES[k]).length;
+        return h('div', { className: 'twd-chip' + (k === mode ? ' on' : ''), textContent: k === 'All' ? 'All' : `${k} ${n}`, title: k === 'New' ? 'Added in the last two updates' : k === 'Featured' ? 'Improved or fixed in a big way' : '', style: k === mode ? 'background:var(--tw-brand,#5865f2);color:#fff' : '', onclick: () => { T.ls.set('pluginSort', k); render(); } }); }));
+      const row = p => [ledRow(h('span', {}, p.name, ...badges(p)), !T.isOff(p.name), () => flipPlugin(p), p.featured && (mode === 'Featured' || isNew(p) === false) ? `${p.desc} · ${p.featured}` : p.desc), ...optionRows(p)];
+      const nodes = [chips];
+      if (mode === 'All') for (const [g, list] of byGroup(all)) nodes.push(sec(g), ...list.flatMap(row));
+      else { const list = all.filter(MODES[mode]); nodes.push(sec(`${mode} (${list.length})`), ...(list.length ? list.flatMap(row) : [h('div', { className: 'twd-out', textContent: mode === 'New' ? 'Nothing new in the last two updates.' : mode === 'Featured' ? 'No featured plugins right now.' : 'None.' })])); }
       return nodes;
     },
     Home() {
@@ -207,7 +211,8 @@ background:linear-gradient(135deg,transparent 50%,rgba(255,255,255,.55) 50%,rgba
             row('krisp', 'No Krisp noise suppression', 'Saves the biggest module; standard noise suppression still works'),
             row('disk', 'Clean disk junk', 'Old Discord builds, old installers and unused language packs, a minute after start-up'),
             ledRow('Trim memory in the background', !!T.ls.get('slimTrim', false), () => { T.ls.set('slimTrim', !T.ls.get('slimTrim', false)); T.debug.refresh(); render(); },
-              'A minute after Discord is minimised or covered, it gives back the memory it can (about 20 MB). Works straight away' + (T.cost.trims ? ` · trimmed ${T.cost.trims}× so far` : '')),
+              'A minute after Discord is minimised or covered, it gives back the memory it can (about 20 MB). Works straight away' + (T.cost.trims ? ` · trimmed ${T.cost.trims}× so far` : '') + (T.cost.trimFreed ? `, ${T.cost.trimFreed} MB back` : '')),
+            action('Trim memory now', async () => { T.notify('Memory', 'Trimming…', 1500, 'info'); const r = await T.trimNow?.(); T.notify('Memory trimmed', r?.freed != null ? `${r.freed} MB back (${r.before} → ${r.after} MB)` : 'Done (could not measure)', 5000, 'success'); render(); }, null, 'Does the same trim right away and says how much memory came back'),
           ];
         })(),
       ];
@@ -330,11 +335,11 @@ background:linear-gradient(135deg,transparent 50%,rgba(255,255,255,.55) 50%,rgba
   const RANK = ['Build badge', 'Tag commands', 'TypingSpeed', 'Tags', 'NoTrack', 'SilentTyping', 'ClearURLs', 'Assistant', 'Generated'];
   const rank = p => { const i = RANK.indexOf(p.name); return i < 0 ? 99 : i; };
   const PLACE_OWN_PAGE = new Set(['MessageLogger']); // their actions live on their own page, not on Home
-  const LOCAL = new Set(['Self', 'Privacy', 'Channel', 'Message log', 'Tools', 'Translate', 'Friends', 'Assistant']); // pages drawn from the plugins placed there
+  const LOCAL = new Set(['Self', 'Notes', 'Privacy', 'Channel', 'Message log', 'Tools', 'Translate', 'Friends', 'Assistant']); // pages drawn from the plugins placed there
   // Sidebar groups, top to bottom. Home is the landing page. Quests and Friends are header tabs (next to Menu), not sidebar pages.
   const SUBS = {
     Home: ['Home'],
-    Local: ['Self', 'Privacy', 'Channel', 'Message log'],
+    Local: ['Self', 'Notes', 'Privacy', 'Channel', 'Message log'],
     Discord: ['Servers', 'Translate', 'Performance', 'Tools'],
     'Make it your own': ['Name & logo', 'Colours', 'Start-up', 'Notifications'],
     Settings: ['CSS', 'Menu',
@@ -343,6 +348,7 @@ background:linear-gradient(135deg,transparent 50%,rgba(255,255,255,.55) 50%,rgba
   // Pages that open from the header instead of the sidebar: [header tab, how to draw it]. Only shown when the plugin is there.
   const PINS = { Quests: () => pagePlugins().find(p => p.page === 'Quests'), Friends: () => [...T.plugins.values()].some(p => placeOf(p) === 'Friends' && !p.hidden) };
   let paintIssues = () => {}; // the red counter on the Issues header tab (private build); does nothing in the public build
+  PINS.Plaude = () => pagePlugins().find(p => p.page === 'Plaude'); // Plaude: a header tab next to Search, only where the plugin is loaded (PTB)
   const pinTabs = () => Object.keys(PINS).filter(k => PINS[k]());
   const pluginActs = () => [...T.plugins.values()].filter(p => !isDevPlugin(p) && (p.actionOnly || !T.isOff(p.name))).flatMap(p => (p.actions || []).map(a => [p, a]));
   // Your own sidebar order: drag a page to move it inside its group, drag a group heading (or Home) to move the whole group.
@@ -389,11 +395,21 @@ background:linear-gradient(135deg,transparent 50%,rgba(255,255,255,.55) 50%,rgba
     } catch (e) { T.notify(p.name + ' failed', String(e.message || e).slice(0, 70), 5000, 'error'); }
     render();
   };
+  // "New" = added in this minor version or the one before (1.25.x and 1.24.x while on 1.25); badges show on the Plugins page.
+  const minorOf = v => { const m = /^(\d+)\.(\d+)/.exec(String(v || '')); return m ? +m[1] * 1000 + +m[2] : null; };
+  const isNew = p => { const a = minorOf(p.added), now = minorOf(T.debug.version); return a != null && now != null && now - a <= 1; };
+  const badge = (t, c) => h('span', { textContent: t, style: `margin-left:6px;padding:0 5px;border-radius:3px;font:800 9px/15px sans-serif;letter-spacing:.06em;vertical-align:1px;color:#fff;background:${c}` });
+  const badges = p => [...(isNew(p) ? [badge('NEW', '#3ba55d')] : []), ...(p.featured ? [badge('IMPROVED', '#5865f2')] : [])];
   const optionRows = p => (p.options || []).map(o => {
     const on = T.opt(p.name, o.key, o.def);
-    if (o.choices) { // a few named choices: click cycles through them
-      const i = Math.max(0, o.choices.findIndex(c => c[0] === on));
-      return action(o.label + ': ' + o.choices[i][1], () => { T.setOpt(p.name, o.key, o.choices[(i + 1) % o.choices.length][0]); render(); }, null, 'Click to change');
+    if (o.choices) { // a few named choices: click cycles through them (o.custom: a number can also be typed in)
+      const k = o.choices.findIndex(c => c[0] === on), i = Math.max(0, k), shown = k < 0 && o.custom ? `${on} ${o.custom.unit || ''} (your own)`.trim() : o.choices[i][1];
+      const row = action(o.label + ': ' + shown, () => { T.setOpt(p.name, o.key, o.choices[k < 0 ? 0 : (i + 1) % o.choices.length][0]); render(); }, null, 'Click for the presets' + (o.custom ? ', or type your own number below' : ''));
+      if (!o.custom) return row;
+      const inp = h('input', { type: 'number', min: o.custom.min, max: o.custom.max, placeholder: `${o.custom.min}–${o.custom.max}`, value: k < 0 ? on : '', style: 'width:110px' });
+      const set = () => { const v = Math.round(+inp.value); if (!inp.value) return; if (!(v >= o.custom.min && v <= o.custom.max)) return T.notify(p.name, `Pick a number from ${o.custom.min} to ${o.custom.max}`, 2500, 'warn'); T.setOpt(p.name, o.key, String(v)); render(); };
+      inp.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') set(); }; inp.onchange = set;
+      return h('div', {}, row, h('div', { className: 'twd-row sub', style: 'cursor:default' }, h('span', { textContent: 'Or type your own' }), inp));
     }
     return o.min != null ? slider(o.label, o.min, o.max, o.step || 1, on, v => String(v), v => T.setOpt(p.name, o.key, v))
       : ledRow(o.label, on, () => { T.setOpt(p.name, o.key, !on); render(); }, '', 'sub');
@@ -549,6 +565,7 @@ background:linear-gradient(135deg,transparent 50%,rgba(255,255,255,.55) 50%,rgba
       else if (searchMode) nodes = q ? searchNodes(q) : [h('div', { className: 'twd-out', textContent: 'Type to search plugins, options and settings.' })];
       else if (pin === 'Quests') nodes = pluginBlock(PINS.Quests());
       else if (pin === 'Friends') nodes = localPage('Friends');
+      else if (pin === 'Plaude') nodes = pluginBlock(pagePlugins().find(p => p.page === 'Plaude'));
       else if (subs) {
         const cur = subs.includes(nav[tab]) ? nav[tab] : pageOrder(tab)[0];
         nodes = LOCAL.has(cur) ? localPage(cur) : views[NAME[cur] || cur]();
@@ -933,20 +950,25 @@ background:linear-gradient(135deg,transparent 50%,rgba(255,255,255,.55) 50%,rgba
   let proj = null, projAt = 0;
   const projText = () => proj ? 'Working on ' + proj : '';
   const projRefresh = () => { if (Date.now() - projAt < 60000) return; projAt = Date.now(); T.cmd({ type: 'project' }, 3000).then(r => { const p = r?.project || null; if (p !== proj) { proj = p; T.debug_paintAsst?.(); } }).catch(() => {}); };
-  const asstText = () => { if (!T.limited()) return projText() || 'Active'; const u = T.ls.get('asstLimit', null)?.until; return 'Out of usage' + (u ? ' · back about ' + new Date(u).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''); };
+  // 1.25.0: instead of a live status, Twilight's line rotates every 15 minutes through things from the projects you work on together.
+  let ROTATE = ['Your assistant'];
+  const slot = () => Math.floor(Date.now() / 900000) % ROTATE.length;
+  const rotText = () => ROTATE[slot()];
+  const stateSig = () => (T.limited() ? 'idle' : 'on') + ':' + slot();
+  const asstText = () => { if (!T.limited()) return rotText(); const u = T.ls.get('asstLimit', null)?.until; return 'Out of usage' + (u ? ' · back about ' + new Date(u).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''); };
   const paint = (n, sub) => {
-    const idle = T.limited(), sig = idle ? 'idle' : 'on'; n.dataset.twState = sig;
+    const idle = T.limited(); n.dataset.twState = stateSig();
     n.querySelectorAll('img').forEach(i => { i.src = T.pfp; i.removeAttribute('srcset'); i.style.borderRadius = '50%'; i.style.objectFit = 'cover'; }); // round like every other avatar
     n.querySelectorAll('svg rect[mask*="status"]').forEach(r => { r.setAttribute('fill', idle ? '#f0b232' : '#23a55a'); r.setAttribute('mask', idle ? 'url(#svg-mask-status-idle)' : 'url(#svg-mask-status-online)'); });
     const st = n.querySelector('[class*="subText"],[class*="subtext"]'); // the cloned row's game / activity line is replaced
     if (st) { const d = h('div', { className: 'body-xs/medium_RAOoio', textContent: sub || asstText() }); st.replaceChildren(d); }
   };
   const unselect = n => { for (const e of [n, ...n.querySelectorAll('*')]) for (const c of [...e.classList]) if (/selected/i.test(c)) e.classList.remove(c); };
-  T.debug_paintAsst = () => { for (const n of document.querySelectorAll('[data-tw-dm]')) paint(n); for (const n of document.querySelectorAll('[data-tw-fr]')) paint(n, T.limited() ? asstText() : projText() || 'Your assistant'); };
+  T.debug_paintAsst = () => { for (const n of document.querySelectorAll('[data-tw-dm]')) paint(n); for (const n of document.querySelectorAll('[data-tw-fr]')) paint(n, asstText()); };
   let keepObs;
   const injectLists = () => {
     if (T.isOff('Assistant') || !asst()) return; // no Assistant plugin (public build) = no Twilight rows
-    projRefresh();
+    // (1.25.0: the live "Working on" status was replaced by the rotating line above, so status.json is no longer read here)
     const first = () => [...document.querySelectorAll('nav[class*="privateChannels"] a[data-list-item-id^="private-channels"][href^="/channels/@me/"]')].map(a => a.closest('li')).find(l => l && !l.dataset.twDm);
     const dm = first();
     let n = document.querySelector('[data-tw-dm]');
@@ -960,7 +982,7 @@ background:linear-gradient(135deg,transparent 50%,rgba(255,255,255,.55) 50%,rgba
       dm.before(n);
     }
     if (n && n.isConnected) {
-      if (n.dataset.twState !== (T.limited() ? 'idle' : 'on')) paint(n);
+      if (n.dataset.twState !== stateSig()) paint(n);
       // Stays the first DM: put it back right away if Discord's list shuffles (one watcher on the list only, no timer).
       const ul = n.parentElement;
       if (ul && keepObs?.ul !== ul) {
@@ -976,10 +998,10 @@ background:linear-gradient(135deg,transparent 50%,rgba(255,255,255,.55) 50%,rgba
       f.querySelector('[class*="username"]')?.replaceChildren(T.brand().name); f.querySelectorAll('[class*="chipletContainer"]').forEach(x => x.remove());
       const d = f.querySelector('[class*="discriminator"]'); if (d) d.textContent = T.brand().name.toLowerCase().replace(/\s+/g, '');
       f.querySelectorAll('[class*="actions"],[class*="actionButtons"]').forEach(x => x.remove());
-      paint(f, T.limited() ? asstText() : projText() || 'Your assistant');
+      paint(f, asstText());
       f.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); asst()?.quick(); }, true);
       row.before(f);
-    } else { const f = document.querySelector('[data-tw-fr]'); if (f && f.dataset.twState !== (T.limited() ? 'idle' : 'on')) paint(f, T.limited() ? asstText() : projText() || 'Your assistant'); }
+    } else { const f = document.querySelector('[data-tw-fr]'); if (f && f.dataset.twState !== stateSig()) paint(f, asstText()); }
   };
 
   T.debug = {

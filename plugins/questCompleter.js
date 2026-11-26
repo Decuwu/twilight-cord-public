@@ -8,6 +8,7 @@
 // Quest data shapes and task-key rules follow what the Orion Vencord plugin (nyxxbit, MIT) documents about Discord's quest data; the code here is our own.
 Twilight.definePlugin({
   name: 'QuestCompleter',
+  featured: 'Survives Discord updates',
   page: 'Quests', // its own top tab in the menu
   devOnly: true, // starts switched off; turning it on in the menu is remembered
   heavy: true,   // paused in lightweight mode
@@ -218,6 +219,12 @@ Twilight.definePlugin({
     else this.say('Claim window closed without claiming: ' + this.nameOf(q0));
     this.refresh();
     return res;
+  },
+  // The top-bar "N to claim": claims one finished quest per click (Nitro trials last, they can only be claimed in Discord).
+  claimOne() {
+    const s = this.state; if (s.claiming || s.claimAllRun) return;
+    const list = this.quests().filter(q => this.unclaimed(q)), q = list.find(x => !this.hasReward(x, 5)) || list[0]; if (!q) return;
+    this.claim(q.id).then(r => { if (r === 'failed') Twilight.notify('Claim failed', this.nameOf(q) + ': claim it in Discord\'s Quests page', 6000, 'info'); });
   },
   // Claim all: one window at a time; the next opens only after the last one is claimed (or failed). Closing a window stops the rest.
   async claimAll() {
@@ -485,6 +492,8 @@ Twilight.definePlugin({
       .twq-count b { color: var(--text-normal,#dbdee1); font-weight: 700; }
       .twq-q { display: inline-flex; align-items: center; gap: 4px; }
       .twq-q svg { flex: none; color: var(--text-normal,#dbdee1); }
+      .twq-count .twq-claim { -webkit-app-region: no-drag; }
+      .twq-count .twq-claim:hover { text-decoration: underline; }
       .twq-count:hover { color: var(--text-normal,#dbdee1); }
 ` });
     document.head.append(me.cs);
@@ -538,8 +547,11 @@ Twilight.definePlugin({
     const key = [toClaim, running, avail, this.otherHolder || ''].join('|');
     if (el.dataset.k !== key) {
       el.dataset.k = key; el.replaceChildren();
-      const part = (b, t) => { const x = document.createElement('span'); x.innerHTML = `<b>${b}</b> ${t}`; el.append(x); };
-      if (toClaim) part(toClaim, 'to claim');
+      if (toClaim) {
+        const x = document.createElement('span'); x.className = 'twq-claim'; x.innerHTML = `<b>${toClaim}</b> to claim`; x.title = 'Claim one reward';
+        x.onclick = e => { e.stopPropagation(); this.claimOne(); };
+        el.append(x);
+      }
       const q = document.createElement('span'); q.className = 'twq-q';
       if (this.otherHolder) { q.append(this.questIcon(), ' running in '); const b = document.createElement('b'); b.textContent = this.otherHolder === 'ptb' ? 'PTB' : this.otherHolder[0].toUpperCase() + this.otherHolder.slice(1); q.append(b); }
       else { const b = document.createElement('b'); b.textContent = `${running}/${avail}`; q.append(b, this.questIcon()); }
