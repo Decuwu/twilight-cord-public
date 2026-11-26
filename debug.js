@@ -495,7 +495,7 @@ background:linear-gradient(135deg,transparent 50%,rgba(255,255,255,.55) 50%,rgba
   };
   const feedbackNodes = () => {
     const me = fbMe(); if (fb.who == null) fb.who = me ? (me.name !== me.tag ? `${me.name} (@${me.tag})` : '@' + me.tag) : '';
-    const who = input('Your name or Discord name, e.g. decø (@.art.deco.)', fb.who); who.oninput = () => { fb.who = who.value; };
+    const who = input('Your name or Discord name, e.g. agent.plaude', fb.who); who.oninput = () => { fb.who = who.value; };
     const title = input('Short title, e.g. "GIF button still shows"', fb.title); title.oninput = () => { fb.title = title.value; };
     const text = h('textarea', { value: fb.text, placeholder: fb.type === 'Bug' ? 'What happened, and what did you expect? Steps to make it happen again help a lot.' : fb.type === 'Idea' ? 'What would you like Twilight to do?' : 'Tell us anything', spellcheck: true, style: 'height:140px' });
     text.oninput = () => { fb.text = text.value; };

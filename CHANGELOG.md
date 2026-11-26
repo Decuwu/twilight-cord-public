@@ -1,5 +1,9 @@
 # Twilight-Cord changelog
 
+## 1.25.1
+**Fixed**
+- The feedback form's example name is now a generic one (agent.plaude).
+
 ## 1.25.0
 **New**
 - **Notes**: right-click any message > **Save to Notes**. Notes has its own page in the menu (Local > Notes) with little page tabs: **+** adds a page, double-click a tab to rename it. Search, Copy, Jump to the message and remove. A copy of the text is kept, so a note survives the message being deleted.
