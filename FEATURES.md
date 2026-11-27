@@ -1,4 +1,4 @@
-# Twilight-Cord: current features (1.25.1)
+# Twilight-Cord: current features (1.26.0)
 A lightweight client mod for Discord Stable and PTB on Windows.
 Download: https://github.com/Decuwu/twilight-cord-public/releases/latest
 
@@ -21,6 +21,7 @@ Download: https://github.com/Decuwu/twilight-cord-public/releases/latest
 - **Quick mute** and **mark everything as read**.
 
 ## Commands and typing
+- **/download**: the video from a TikTok, Instagram, Reddit, YouTube or X link, attached as a file.
 - **/tag**: save text and send it by name.
 - **/petpet**: pet-pet GIF of someone's avatar.
 - **SilentTyping** and a **words-per-minute** counter.
@@ -33,6 +34,7 @@ Download: https://github.com/Decuwu/twilight-cord-public/releases/latest
 
 ## The mod itself
 - Menu (Ctrl+T on new installs) with plugin search and sorting.
+- Discord opens where you last had its window.
 - Auto-updates with a changelog, and a check after Discord updates.
 - Built-in feedback form.
 - **Quest completer** (off by default): against Discord's rules, your account can be banned.

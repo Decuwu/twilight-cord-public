@@ -1,5 +1,5 @@
 {
-  "version": "1.25.1",
+  "version": "1.26.0",
   "files": [
     "core.js",
     "debug.js",
@@ -41,6 +41,8 @@
     "measure.js",
     "stock.js",
     "CHANGELOG.md",
-    "feedback.json"
+    "feedback.json",
+    "downloader.js",
+    "plugins/download.js"
   ]
 }

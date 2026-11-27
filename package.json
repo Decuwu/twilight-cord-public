@@ -1,6 +1,6 @@
 {
   "name": "twilight-cord",
-  "version": "1.25.1",
+  "version": "1.26.0",
   "private": true,
   "bin": "installer.js",
   "scripts": {
@@ -12,6 +12,7 @@
     "assets": [
       "core.js",
       "debug.js",
+      "downloader.js",
       "twilight.js",
       "manifest.json",
       "config.json",

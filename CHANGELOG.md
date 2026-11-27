@@ -1,5 +1,13 @@
 # Twilight-Cord changelog
 
+## 1.26.0
+**New**
+- **/download**: paste a TikTok, Instagram, Reddit, YouTube, X (or most other) link and the video lands in your message box as a file, ready to send, and on your clipboard. It is shrunk to fit your upload limit, with audio-only and GIF options. The download tools (yt-dlp, ffmpeg and deno) are fetched from GitHub the first time you use it.
+- **Window position remembered**: Discord opens where you last had it, even after a restart or shutdown.
+
+**Fixed**
+- Platform icons no longer pile up next to some names, and AutoMod alerts no longer show any.
+
 ## 1.25.1
 **Fixed**
 - The feedback form's example name is now a generic one (agent.plaude).

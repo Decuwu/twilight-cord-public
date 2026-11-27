@@ -19,7 +19,8 @@ Twilight.definePlugin({
       this.say(`start (v${T.debug.version})`);
       const api = T.rest(); this.say('REST client: ' + (api ? 'found' : 'MISSING'));
       const GS = T.findStore('GuildStore'), me = T.findStore('UserStore')?.getCurrentUser?.()?.id;
-      const g = GS && Object.values(GS.getGuilds()).find(x => /^test( server)?$/i.test(x.name.trim()) && x.ownerId === me);
+      const pick = T.ls.get('cloner:guild', ''); // a test server that goes by another name, set by its server ID
+      const g = GS && Object.values(GS.getGuilds()).find(x => (x.id === pick || /^test( server)?$/i.test(x.name.trim())) && x.ownerId === me);
       if (!api || !g) { this.say(g ? 'cannot continue without the REST client' : 'no server called "test" or "test server" that you own: create one and this runs on the next launch'); if (manual) T.notify('Cloner test', g ? 'REST client missing' : 'Make a server called "test" first', 6000, 'warn'); return; }
       let ok = true;
       const fail = (what, e) => { ok = false; this.say(`${what} FAILED: ${e?.status || ''} ${String(e?.body?.message || e?.message || JSON.stringify(e?.body || e)).slice(0, 200)} ${e?.body?.errors ? JSON.stringify(e.body.errors).slice(0, 200) : ''}`); };

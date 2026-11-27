@@ -47,7 +47,9 @@ Twilight.definePlugin({
     // Put (or refresh, or remove) the icons in `host`, right after `anchor` (or at the end of host).
     const place = (host, anchor, uid, on) => {
       if (!host) return false;
-      const sig = on ? sigOf(uid) : '', old = host.querySelector(':scope > .tw-plat, :scope > * > .tw-plat');
+      // 1.25.2: look at any depth (some names, like AutoMod's, are nested further down, which added a new set on every pass).
+      const sig = on ? sigOf(uid) : '', [old, ...extra] = host.querySelectorAll('.tw-plat');
+      extra.forEach(n => n.remove());
       if (!sig) { old?.remove(); return false; }
       if (old && old.dataset.sig === sig && old.dataset.uid === uid && (old.parentElement === anchor?.parentElement || !anchor)) return true;
       old?.remove();
@@ -85,7 +87,7 @@ Twilight.definePlugin({
       for (const h3 of document.querySelectorAll('li[id^="chat-messages-"] h3')) {
         headers++;
         const li = h3.closest('li'), name = h3.querySelector('[class*="username"]'); if (!name) continue;
-        const mm = /^chat-messages-(\d+)-(\d+)$/.exec(li.id), uid = mm && T.findStore('MessageStore')?.getMessage?.(mm[1], mm[2])?.author?.id;
+        const mm = /^chat-messages-(\d+)-(\d+)$/.exec(li.id), msg = mm && T.findStore('MessageStore')?.getMessage?.(mm[1], mm[2]), uid = msg?.type === 24 ? '' : msg?.author?.id; // 24 = AutoMod alert: the header says AutoMod, the author is the blocked member
         if (uid) ids++;
         const host = h3.querySelector('[class*="headerText"]') || h3; tag(host, uid, 'm');
         if (place(host, name, uid || '', m && !!uid)) placed++;

@@ -216,6 +216,7 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
       if (w.isDestroyed()) return;
       if (w.id === global.mainWindowId) {
         mainWin = w; w.once('closed', () => { if (mainWin === w) mainWin = null; });
+        try { rememberWindow(w); } catch (e) { note('window memory failed: ' + (e && e.message || e)); }
         boot('opening main window');
         w.webContents.once('did-start-loading', () => boot('loading ' + (CHANNEL === 'stable' ? '' : CHANNEL + '.') + 'discord.com'));
         w.webContents.once('dom-ready', () => boot('page loaded'));
@@ -226,6 +227,23 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
       try { if (hideOn()) w.setContentProtection(true); } catch {}
     }));
   } catch (e) { console.error('[twilight] window watch failed', e); }
+  // ---- the main window opens where it last was. Discord only saves its position on a normal close, so restarts and shutdowns lost it.
+  // Saved to window-bounds-<channel>.json shortly after every move or resize, and put back at start-up. Event driven, nothing runs while idle.
+  global.__twWindowMemory = true; // an older owner-only copy of this (twilight-local.js) stands aside
+  const rememberWindow = w => {
+    const F = path.join(__dirname, `window-bounds-${CHANNEL}.json`); let ready = false, started = false, t = 0;
+    const read = f => { try { const j = JSON.parse(fs.readFileSync(f, 'utf8')); return j && j.b && ['x', 'y', 'width', 'height'].every(k => Number.isFinite(j.b[k])) ? j : null; } catch { return null; } };
+    const saved = read(F) || (CHANNEL === 'ptb' ? read(path.join(__dirname, 'window-bounds.json')) : null);
+    // only if enough of it is still on a screen (a monitor may be gone)
+    const onScreen = b => require('electron').screen.getAllDisplays().some(({ workArea: a }) => Math.min(b.x + b.width, a.x + a.width) - Math.max(b.x, a.x) > 100 && Math.min(b.y + b.height, a.y + a.height) - Math.max(b.y, a.y) > 100);
+    const place = () => { try { if (!saved || w.isDestroyed() || !onScreen(saved.b)) return; if (w.isMaximized()) { if (saved.max) return; w.unmaximize(); } w.setBounds(saved.b); if (saved.max) w.maximize(); } catch (e) { note('window place failed: ' + (e && e.message || e)); } };
+    const save = () => { try { if (!ready || w.isDestroyed() || !w.isVisible() || w.isMinimized() || w.isFullScreen()) return; const max = w.isMaximized(); fs.writeFileSync(F + '.tmp', JSON.stringify({ max, b: max ? w.getNormalBounds() : w.getBounds() })); fs.renameSync(F + '.tmp', F); } catch {} };
+    // Discord positions the window itself as it shows it, so ours goes on afterwards; saving starts once that has settled.
+    const settle = () => { if (started) return; started = true; place(); setTimeout(() => { place(); setTimeout(() => { ready = true; save(); try { note(`window at ${JSON.stringify(w.getBounds())}`); } catch {} }, 700); }, 900); };
+    if (w.isVisible()) w.webContents.once('did-finish-load', settle); else { place(); w.once('show', settle); }
+    for (const ev of ['move', 'resize', 'maximize', 'unmaximize', 'restore']) w.on(ev, () => { clearTimeout(t); t = setTimeout(save, 500); });
+    w.on('close', () => { clearTimeout(t); save(); });
+  };
   // Real usage numbers for Discord Stable and Discord PTB, whichever runs the mod (Windows). One short PowerShell run, only when you ask (overlay > Measure).
   const PS_SCRIPT = [
     "$ErrorActionPreference='SilentlyContinue'",
@@ -363,6 +381,8 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
     if (c?.type === 'metrics') return metrics();
     if (c?.type === 'translate' && c.op === 'usage') return deeplUsage(c.key);
     if (c?.type === 'translate' && typeof c.text === 'string' && c.text.length < 3000 && /^[\w-]{2,8}$/.test(c.to || '')) return translateWith(c.engine, c.text, c.to, c.key);
+    // /download (Download plugin): the engine loads on first use only, so it costs nothing at start-up.
+    if (c?.type === 'dl' && typeof c.op === 'string') return require('./downloader.js').cmd(c);
     // Reports the Probe plugin writes next to the mod (so Claude can read them from the folder). Fixed names only.
     if (c?.type === 'report' && /^[\w-]{1,40}\.(json|txt|log)$/.test(c.name) && typeof c.text === 'string' && c.text.length < 2e6) {
       const dir = path.join(__dirname, 'reports'); fs.mkdirSync(dir, { recursive: true });
