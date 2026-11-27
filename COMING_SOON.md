@@ -1,4 +1,4 @@
 # Coming soon
 
 ## Next update
-- Nothing announced yet.
+- **More reliable updates**: Twilight will fetch updates without running into GitHub's hourly limit, so they arrive in full without a long wait.
