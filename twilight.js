@@ -447,7 +447,7 @@ ${splashCfg().log ? `#splash{padding-bottom:66px!important}
   });
 
   // ---- auto updater: pulls manifest.json + listed files from the (private) GitHub repo ----
-  const SAFE = /^(core\.js|debug\.js|twilight\.js|measure\.js|stock\.js|CHANGELOG\.md|feedback\.json|plugins\/[\w-]+\.js|assets\/[\w-]+\.js|themes\/[\w-]+\.css)$/;
+  const SAFE = /^(core\.js|debug\.js|twilight\.js|measure\.js|stock\.js|downloader\.js|CHANGELOG\.md|feedback\.json|plugins\/[\w-]+\.js|assets\/[\w-]+\.js|themes\/[\w-]+\.css)$/;
   // Versions: "1.19.0" is a release (on GitHub); "1.19.0.d3" is local dev build 3 of what will be released as 1.19.0.
   const isDev = v => /\.d\d*$/i.test(String(v || ''));
   const num = x => parseInt(x, 10) || 0; // "13-beta" counts as 13

@@ -1,5 +1,9 @@
 # Twilight-Cord changelog
 
+## 1.26.1
+**Fixed**
+- /download now works after an automatic update (the updater was leaving out one of its files). Twilight fetches it by itself; Discord may restart once more.
+
 ## 1.26.0
 **New**
 - **/download**: paste a TikTok, Instagram, Reddit, YouTube, X (or most other) link and the video lands in your message box as a file, ready to send, and on your clipboard. It is shrunk to fit your upload limit, with audio-only and GIF options. The download tools (yt-dlp, ffmpeg and deno) are fetched from GitHub the first time you use it.

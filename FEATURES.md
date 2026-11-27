@@ -1,4 +1,4 @@
-# Twilight-Cord: current features (1.26.0)
+# Twilight-Cord: current features (1.26.1)
 A lightweight client mod for Discord Stable and PTB on Windows.
 Download: https://github.com/Decuwu/twilight-cord-public/releases/latest
 
